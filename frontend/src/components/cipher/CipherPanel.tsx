@@ -186,7 +186,7 @@ export default function CipherPanel() {
 
       <div className="btn-row cipher-actions">
         <button className="btn btn-accent" onClick={() => run('encrypt')}>Chiffrer ↓</button>
-        <button className="btn" onClick={() => run('decrypt')}>Déchiffrer ↓</button>
+        <button className="btn btn-accent" onClick={() => run('decrypt')}>Déchiffrer ↓</button>
       </div>
 
       {resp && !resp.ok && <div className="warn error">⚠ {resp.error}</div>}

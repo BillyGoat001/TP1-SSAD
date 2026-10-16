@@ -69,9 +69,15 @@ class DictRequest(BaseModel):
     words: Optional[List[str]] = None
 
 
-class EstimateRequest(BaseModel):
-    case: str
-    length: Optional[int] = None
+class ProtectRequest(BaseModel):
+    password: str
+    require_lower: bool = False
+    require_upper: bool = False
+    require_digit: bool = False
+    require_symbol: bool = False
+    min_length: Optional[int] = None
+    limit_attempts: bool = False
+    slow_hash: bool = False
 
 
 class HashRequest(BaseModel):
@@ -147,11 +153,28 @@ def cipher_warning(req: WarningRequest):
 # -------------------------------------------------------- passwords (P3) ----
 @app.get("/api/passwords/cases")
 def password_cases():
-    return _ok(cases={
-        k: {"label": v["label"], "charset": v["charset"], "length": v["length"],
-            "keyspace": pw.keyspace(v["charset"], v["length"])}
-        for k, v in pw.CASES.items()
-    }, dictionary=pw.DEFAULT_DICTIONARY, fullCharset=pw.FULL_CHARSET)
+    return _ok(
+        cases={
+            k: {
+                "label": v["label"],
+                "charset": v["charset"],
+                "length": v["length"],
+                "keyspace": pw.keyspace(v["charset"], v["length"]),
+                "keyspaceText": pw.fmt_count(pw.keyspace(v["charset"], v["length"])),
+            }
+            for k, v in pw.CASES.items()
+        },
+        fullCharset=pw.FULL_CHARSET,
+        classSizes=pw.CLASS_SIZES,
+        dictionarySize=len(pw.DEFAULT_DICTIONARY),
+        assumptions={
+            "fastRate": pw.FAST_RATE,
+            "slowHashRate": pw.SLOW_HASH_RATE,
+            "lockoutAttempts": pw.LOCKOUT_ATTEMPTS,
+            "lockoutWindow": pw.LOCKOUT_WINDOW,
+            "maxAttempts": pw.MAX_ATTEMPTS,
+        },
+    )
 
 
 @app.post("/api/passwords/bruteforce")
@@ -167,12 +190,17 @@ def password_dictionary(req: DictRequest):
     return _ok(**pw.dictionary_attack(req.target, req.words))
 
 
-@app.post("/api/passwords/estimate")
-def password_estimate(req: EstimateRequest):
-    try:
-        return _ok(**pw.estimate(req.case, req.length))
-    except ValueError as e:
-        return _err(str(e))
+@app.post("/api/passwords/protect")
+def password_protect(req: ProtectRequest):
+    return _ok(**pw.analyze(req.password, {
+        "require_lower": req.require_lower,
+        "require_upper": req.require_upper,
+        "require_digit": req.require_digit,
+        "require_symbol": req.require_symbol,
+        "min_length": req.min_length,
+        "limit_attempts": req.limit_attempts,
+        "slow_hash": req.slow_hash,
+    }))
 
 
 @app.post("/api/passwords/hash")

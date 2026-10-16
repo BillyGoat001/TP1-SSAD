@@ -3,7 +3,7 @@
 
 import type {
   Algo, Operation, CipherResponse, BruteResult, DictResult, HashResult,
-  CaseInfo, IntegrityDemo,
+  CasesResponse, ProtectResult, Protections, IntegrityDemo,
 } from './types'
 
 async function post<T>(url: string, body: unknown): Promise<T> {
@@ -34,17 +34,15 @@ export const api = {
   dictionary: (target: string) =>
     post<DictResult>('/api/passwords/dictionary', { target }),
 
+  protect: (password: string, protections: Protections) =>
+    post<ProtectResult>('/api/passwords/protect', { password, ...protections }),
+
   hashPassword: (password: string) =>
     post<HashResult>('/api/passwords/hash', { password }),
 
   cases: async () => {
     const res = await fetch('/api/passwords/cases')
-    return (await res.json()) as {
-      ok: boolean
-      cases: Record<string, CaseInfo>
-      dictionary: string[]
-      fullCharset: string
-    }
+    return (await res.json()) as CasesResponse
   },
 
   integrityDemo: (key: string, original: string, received: string) =>

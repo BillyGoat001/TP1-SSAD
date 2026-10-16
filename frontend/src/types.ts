@@ -71,15 +71,33 @@ export interface CipherResponse {
   trace?: Trace
 }
 
+export type Strength = 'instant' | 'faible' | 'moyen' | 'fort' | 'inviolable'
+
+export interface Estimate {
+  alphabet: number
+  length: number
+  keyspace: number | null
+  keyspaceText: string
+  seconds: number | null
+  human: string
+  strength: Strength
+  rate: number
+  rateNotes?: string[]
+}
+
 export interface BruteResult {
   ok: boolean
   found: boolean
-  password?: string
+  stopped: boolean
+  password?: string | null
   attempts: number
   seconds: number
-  keyspace: number
+  keyspace: number | null
+  keyspaceText: string
+  charsetSize: number
+  length: number
   label: string
-  stopped: boolean
+  estimate: Estimate
 }
 
 export interface DictResult {
@@ -89,6 +107,14 @@ export interface DictResult {
   attempts: number
   seconds: number
   size: number
+}
+
+export interface ProtectResult {
+  ok: boolean
+  unprotected: Estimate
+  protected: Estimate
+  factorText: string | null
+  direction: 'longer' | 'shorter' | 'equal'
 }
 
 export interface HashResult {
@@ -105,6 +131,41 @@ export interface CaseInfo {
   charset: string
   length: number
   keyspace: number
+  keyspaceText: string
+}
+
+export interface ClassSizes {
+  lower: number
+  upper: number
+  digit: number
+  symbol: number
+}
+
+export interface Assumptions {
+  fastRate: number
+  slowHashRate: number
+  lockoutAttempts: number
+  lockoutWindow: number
+  maxAttempts: number
+}
+
+export interface CasesResponse {
+  ok: boolean
+  cases: Record<string, CaseInfo>
+  fullCharset: string
+  classSizes: ClassSizes
+  dictionarySize: number
+  assumptions: Assumptions
+}
+
+export interface Protections {
+  require_lower: boolean
+  require_upper: boolean
+  require_digit: boolean
+  require_symbol: boolean
+  min_length: number | null
+  limit_attempts: boolean
+  slow_hash: boolean
 }
 
 export interface IntegrityDemo {

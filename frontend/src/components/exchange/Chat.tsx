@@ -16,27 +16,23 @@ export interface ChatMsg {
 // reliée par un trait : l'algorithme et la clé utilisés pour CE message.
 // Un bouton bascule entre la conversation en clair et ce qui a réellement
 // circulé (le chiffré).
-export default function Chat({ msgs, cipherView, onToggle, bits }: {
+export default function Chat({ msgs, cipherView, onToggle }: {
   msgs: ChatMsg[]
   cipherView: boolean
   onToggle: () => void
-  bits: number | null
 }) {
   const n = msgs.length
   return (
     <section className="ex-chat" aria-label="Conversation entre A et B">
       <div className={'ex-chat-grid' + (cipherView ? ' is-cipher' : '')}>
-        <div className="ex-chat-window" style={{ gridRow: `1 / ${n + 3}` }} aria-hidden="true" />
+        <div className="ex-chat-window" style={{ gridRow: `1 / ${n > 0 ? n + 3 : 2}` }} aria-hidden="true" />
 
-        <header className="ex-chat-head" style={{ gridRow: 1 }}>
+        <header className={'ex-chat-head' + (n > 0 ? '' : ' is-empty')} style={{ gridRow: 1 }}>
           <span className="ex-chat-avatars">
             <span className="ex-avatar ex-from-a"><UserIcon /></span>
             <span className="ex-avatar ex-from-b"><UserIcon /></span>
           </span>
-          <span className="ex-chat-title">
-            <b>Utilisateur A · Utilisateur B</b>
-            <small>{bits ? `Chiffré de bout en bout · RSA ${bits} bits` : 'Génère les clés pour commencer'}</small>
-          </span>
+          <span className="ex-chat-title"><b>Chat entre A et B</b></span>
           {/* les deux libellés sont empilés : le bouton garde la même largeur dans les deux vues */}
           <button type="button" className={'ex-chat-toggle' + (cipherView ? ' is-on' : '')} onClick={onToggle} aria-pressed={cipherView}>
             <span className={'ex-tog' + (cipherView ? ' is-off' : '')} aria-hidden={cipherView}><LockIcon /> Voir chiffré</span>
@@ -84,11 +80,8 @@ export default function Chat({ msgs, cipherView, onToggle, bits }: {
           )
         })}
 
-        <div className="ex-chat-foot" style={{ gridRow: n + 2 }}>
-          <span className={'ex-foot' + (n === 0 ? '' : ' is-off')}>Aucun message pour l'instant : chiffre puis envoie un message depuis A ou B.</span>
-          <span className={'ex-foot' + (n > 0 && !cipherView ? '' : ' is-off')}>La conversation en clair · « Voir chiffré » montre ce qui a circulé.</span>
-          <span className={'ex-foot' + (n > 0 && cipherView ? '' : ' is-off')}>Ce qui a réellement circulé sur le canal : sans la clé, illisible.</span>
-        </div>
+        {/* un peu d'air sous la dernière bulle */}
+        {n > 0 && <div className="ex-chat-foot" style={{ gridRow: n + 2 }} aria-hidden="true" />}
       </div>
     </section>
   )

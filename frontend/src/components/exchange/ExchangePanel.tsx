@@ -576,7 +576,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
                     <label className="field grow">
                       <span className="field-label">Clé (lettres)</span>
                       <input
-                        className="text-input ex-tint" value={st.pfKey} placeholder="ex. MONARCHY" autoComplete="off"
+                        className="text-input ex-tint" value={st.pfKey} placeholder="ex. PLAYFAIR" autoComplete="off"
                         onChange={(e) => upd(u, { pfKey: e.target.value.replace(/[^a-zA-Z ]/g, '').toUpperCase(), ...inval })}
                       />
                     </label>
@@ -799,7 +799,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
         </div>
       </div>
 
-      <Chat msgs={chat} cipherView={cipherView} onToggle={() => setCipherView((c) => !c)} bits={keys.a?.bits ?? null} />
+      <Chat msgs={chat} cipherView={cipherView} onToggle={() => setCipherView((c) => !c)} />
     </div>
   )
 }

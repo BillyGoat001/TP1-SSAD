@@ -159,7 +159,7 @@ export default function CipherPanel() {
             <input
               className="text-input" value={playfairKey}
               onChange={(e) => setPlayfairKey(e.target.value.replace(/[^a-zA-Z ]/g, '').toUpperCase())}
-              placeholder="ex. MONARCHY"
+              placeholder="ex. PLAYFAIR"
             />
           </div>
         )}

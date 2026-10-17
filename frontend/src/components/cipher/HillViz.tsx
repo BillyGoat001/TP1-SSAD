@@ -1,14 +1,23 @@
+import type { CSSProperties } from 'react'
 import type { HillTrace } from '../../types'
 
 interface Props {
   trace: HillTrace
   index: number
   original: string
+  showResult?: boolean // sous chaque bloc, son résultat (partie Échange)
+}
+
+/** Un très grand nombre s'affiche abrégé (12345…67890) ; la valeur exacte reste dans l'info-bulle. */
+function Num({ v, className }: { v: number | string; className?: string }) {
+  const s = String(v)
+  const cut = s.length > 13
+  return <span className={className} title={cut ? s : undefined}>{cut ? s.slice(0, 5) + '…' + s.slice(-5) : s}</span>
 }
 
 // Matrix × block on the left; the prepared message and the current dot-product
 // on the right; an A=0 … Z=25 reference row below.
-export default function HillViz({ trace, index, original }: Props) {
+export default function HillViz({ trace, index, original, showResult = false }: Props) {
   const current = index >= 0 ? trace.steps[index] : null
   const blockIdx = current ? current.blockIndex : 0
   const block = trace.blocks[blockIdx]
@@ -25,14 +34,14 @@ export default function HillViz({ trace, index, original }: Props) {
             {trace.n}×{trace.n} — matrice clé × bloc de {trace.n} lettres (mod 26).
           </div>
           <div className="hill-eq">
-            <div className="hill-matrix">
+            <div className="hill-matrix" style={{ '--n': trace.n } as CSSProperties}>
               {trace.matrix.map((row, r) => (
                 <div
                   key={r}
                   className={'hill-row' + (current && r === current.rowIndex ? ' is-active' : '')}
                 >
                   {row.map((v, c) => (
-                    <span key={c} className="hill-num">{v}</span>
+                    <Num key={c} className="hill-num" v={v} />
                   ))}
                 </div>
               ))}
@@ -66,10 +75,10 @@ export default function HillViz({ trace, index, original }: Props) {
               <span className="calc-terms">
                 {current.terms.map(([m, v], i) => (
                   <span key={i}>
-                    {i > 0 ? ' + ' : ''}{m}·{v}
+                    {i > 0 ? ' + ' : ''}<Num v={m} />·{v}
                   </span>
                 ))}
-                {' = '}{current.sum} ≡ {current.mod} (mod 26)
+                {' = '}<Num v={current.sum} /> ≡ {current.mod} (mod 26)
               </span>
               <span className="focus-op">→</span>
               <span className="focus-out">{current.outChar}</span>
@@ -77,6 +86,23 @@ export default function HillViz({ trace, index, original }: Props) {
           )}
         </div>
       </div>
+
+      {showResult && (
+        <div className="tiles tiles-io hill-io">
+          {trace.blocks.map((b, bi) => {
+            const steps = trace.steps.map((s, i) => ({ s, i })).filter((x) => x.s.blockIndex === bi)
+            const isCur = !!current && current.blockIndex === bi
+            const done = steps.length > 0 && steps[steps.length - 1].i < index && !isCur
+            const out = steps.filter((x) => x.i <= index).map((x) => x.s.outChar).join('')
+            return (
+              <div key={bi} className="tile-io">
+                <span className={'tile wide' + (done ? ' done' : '') + (isCur ? ' current' : '')}>{b.letters.join('')}</span>
+                <span className={'tile wide tile-out' + (out ? ' is-shown' : '') + (isCur ? ' is-current' : '')}>{out}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* A = 0 … Z = 25 reference */}
       <div className="hill-alpha-caption">Correspondance lettre → nombre (A = 0 … Z = 25)</div>

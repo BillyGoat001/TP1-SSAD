@@ -36,13 +36,16 @@ export interface PlayfairTrace {
   result: string
 }
 
+// Les entiers trop grands pour JavaScript (au-delà de 2^53) arrivent en texte.
+type Big = number | string
+
 export interface HillStep {
   blockIndex: number
   rowIndex: number
-  row: number[]
+  row: Big[]
   values: number[]
-  terms: [number, number][]
-  sum: number
+  terms: [Big, number][]
+  sum: Big
   mod: number
   outChar: string
   outIndex: number
@@ -54,7 +57,7 @@ export interface HillBlock {
 export interface HillTrace {
   kind: 'hill'
   n: number
-  matrix: number[][]
+  matrix: Big[][]
   cleaned: string
   blocks: HillBlock[]
   steps: HillStep[]
@@ -69,6 +72,57 @@ export interface CipherResponse {
   result?: string
   warning?: string | null
   trace?: Trace
+}
+
+// ---- Échange de clés RSA (Partie 2) — voir backend/rsa_crypto.py ----
+// Les grands nombres arrivent en texte : un nombre JavaScript perd sa précision au-delà de 2^53.
+export interface RsaKey {
+  bits: number
+  p: string
+  q: string
+  n: string
+  phi: string
+  e: string
+  d: string
+  ms: number
+}
+export interface KeygenResponse {
+  ok: boolean
+  error?: string
+  key?: RsaKey
+}
+/** Le « mode d'emploi » d'un message : l'algorithme et sa clé.
+ *  Les nombres voyagent en texte pour garder tous leurs chiffres (Python les relit exactement). */
+export interface ExchangeParams {
+  algo: Algo
+  shift?: number | string
+  direction?: 'right' | 'left'
+  key?: string
+  matrix?: (number | string)[][]
+}
+export interface SealBlock {
+  text: string
+  m: string
+  c: string
+}
+export interface SealResponse {
+  ok: boolean
+  error?: string
+  payload?: string
+  blockBytes?: number
+  blocks?: SealBlock[]
+}
+export interface OpenBlock {
+  c: string
+  m: string
+  text: string
+}
+export interface OpenResponse {
+  ok: boolean
+  error?: string
+  payload?: string
+  blocks?: OpenBlock[]
+  params?: ExchangeParams
 }
 
 export type Strength = 'instant' | 'faible' | 'moyen' | 'fort' | 'inviolable'

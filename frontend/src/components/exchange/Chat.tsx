@@ -1,0 +1,95 @@
+import { Fragment } from 'react'
+import type { CSSProperties } from 'react'
+import type { ExchangeParams } from '../../types'
+import { type U, NAME, keyText, keyShort, UserIcon, LockIcon, UnlockIcon } from './parts'
+
+export interface ChatMsg {
+  id: number
+  from: U
+  plain: string   // le message tel que l'expéditeur l'a écrit
+  cipher: string  // ce qui a circulé sur le canal
+  params: ExchangeParams
+}
+
+// La conversation entre A et B, façon messagerie. A écrit à gauche, B à droite
+// (comme dans les cartes). Chaque message a sa bulle d'explication sur le côté,
+// reliée par un trait : l'algorithme et la clé utilisés pour CE message.
+// Un bouton bascule entre la conversation en clair et ce qui a réellement
+// circulé (le chiffré).
+export default function Chat({ msgs, cipherView, onToggle, bits }: {
+  msgs: ChatMsg[]
+  cipherView: boolean
+  onToggle: () => void
+  bits: number | null
+}) {
+  const n = msgs.length
+  return (
+    <section className="ex-chat" aria-label="Conversation entre A et B">
+      <div className={'ex-chat-grid' + (cipherView ? ' is-cipher' : '')}>
+        <div className="ex-chat-window" style={{ gridRow: `1 / ${n + 3}` }} aria-hidden="true" />
+
+        <header className="ex-chat-head" style={{ gridRow: 1 }}>
+          <span className="ex-chat-avatars">
+            <span className="ex-avatar ex-from-a"><UserIcon /></span>
+            <span className="ex-avatar ex-from-b"><UserIcon /></span>
+          </span>
+          <span className="ex-chat-title">
+            <b>Utilisateur A · Utilisateur B</b>
+            <small>{bits ? `Chiffré de bout en bout · RSA ${bits} bits` : 'Génère les clés pour commencer'}</small>
+          </span>
+          {/* les deux libellés sont empilés : le bouton garde la même largeur dans les deux vues */}
+          <button type="button" className={'ex-chat-toggle' + (cipherView ? ' is-on' : '')} onClick={onToggle} aria-pressed={cipherView}>
+            <span className={'ex-tog' + (cipherView ? ' is-off' : '')} aria-hidden={cipherView}><LockIcon /> Voir chiffré</span>
+            <span className={'ex-tog' + (cipherView ? '' : ' is-off')} aria-hidden={!cipherView}><UnlockIcon /> Voir en clair</span>
+          </button>
+        </header>
+
+        {msgs.map((m, i) => {
+          const side = m.from === 'a' ? 'l' : 'r'
+          const firstOfGroup = i === 0 || msgs[i - 1].from !== m.from
+          const lastOfGroup = i === n - 1 || msgs[i + 1].from !== m.from
+          const full = keyText(m.params), abbr = keyShort(m.params)
+          const how = `${NAME[m.params.algo]} · clé ${abbr}`
+          return (
+            <Fragment key={m.id}>
+              {/* hors de la fenêtre : visible seulement dans la vue chiffrée, bulle après bulle */}
+              <div
+                className={`ex-side ex-side-${side} ex-from-${m.from}`} aria-hidden={!cipherView}
+                style={{ gridRow: i + 2, '--d': `${Math.min(i, 8) * 70}ms` } as CSSProperties}
+              >
+                <div className="ex-callout">
+                  <span className="ex-callout-algo">{NAME[m.params.algo]}</span>
+                  <span className="ex-callout-key" title={abbr !== full ? full : undefined}>clé {abbr}</span>
+                </div>
+                <span className="ex-link" aria-hidden="true" />
+              </div>
+              <div
+                className={`ex-chat-row is-${m.from} ex-from-${m.from}` + (i === 0 ? ' is-first' : firstOfGroup ? ' is-group' : '')}
+                style={{ gridRow: i + 2 }}
+              >
+                <span className={'ex-avatar sm' + (lastOfGroup ? '' : ' is-ghost')}><UserIcon /></span>
+                <div className="ex-bubble-wrap">
+                  {/* clair et chiffré sont empilés dans la même case : la bulle (et donc la fenêtre) garde
+                      exactement la même taille dans les deux vues, seul l'un des deux textes se voit */}
+                  <div className={'ex-bubble' + (cipherView ? ' is-cipher' : '')} title={cipherView ? how : undefined}>
+                    <span className={'ex-bubble-layer' + (cipherView ? ' is-off' : '')} aria-hidden={cipherView}>{m.plain}</span>
+                    <span className={'ex-bubble-layer is-secret' + (cipherView ? '' : ' is-off')} aria-hidden={!cipherView}>
+                      <span className="ex-bubble-lock"><LockIcon /></span>{m.cipher}
+                    </span>
+                  </div>
+                  <span className="ex-bubble-cap">{how}</span>
+                </div>
+              </div>
+            </Fragment>
+          )
+        })}
+
+        <div className="ex-chat-foot" style={{ gridRow: n + 2 }}>
+          <span className={'ex-foot' + (n === 0 ? '' : ' is-off')}>Aucun message pour l'instant : chiffre puis envoie un message depuis A ou B.</span>
+          <span className={'ex-foot' + (n > 0 && !cipherView ? '' : ' is-off')}>La conversation en clair · « Voir chiffré » montre ce qui a circulé.</span>
+          <span className={'ex-foot' + (n > 0 && cipherView ? '' : ' is-off')}>Ce qui a réellement circulé sur le canal : sans la clé, illisible.</span>
+        </div>
+      </div>
+    </section>
+  )
+}

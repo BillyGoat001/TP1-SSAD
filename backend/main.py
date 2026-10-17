@@ -2,7 +2,8 @@
 """
 FastAPI backend for the TP Security app.
 
-Exposes the Python logic (ciphers + traces, password attacks, HMAC integrity)
+Exposes the Python logic (ciphers + traces, RSA key exchange, password attacks,
+HMAC integrity)
 as a small JSON API under /api, and — in production — serves the built React
 frontend so the whole thing runs with a single command and only Python.
 
@@ -27,6 +28,7 @@ import encryption as en
 import traces
 import passwords as pw
 import integrity
+import rsa_crypto as rsa
 
 app = FastAPI(title="TP Security API")
 
@@ -101,8 +103,48 @@ class IntegrityDemoRequest(BaseModel):
     received: str
 
 
+class KeygenRequest(BaseModel):
+    bits: int = rsa.DEFAULT_BITS
+
+
+class SealRequest(BaseModel):
+    # le mode d'emploi à enfermer (mêmes champs que /api/cipher)…
+    algo: str
+    shift: Optional[int] = None
+    direction: str = "right"
+    key: Optional[str] = None
+    matrix: Optional[List[List[int]]] = None
+    # …et la clé publique du destinataire (grands nombres en texte)
+    n: str
+    e: str
+
+
+class OpenRequest(BaseModel):
+    # la clé privée du destinataire + les blocs chiffrés du coffre
+    n: str
+    d: str
+    blocks: List[str]
+
+
 def _ok(**data: Any) -> JSONResponse:
     return JSONResponse({"ok": True, **data})
+
+
+_JS_MAX = 2 ** 53
+
+
+def _js_safe(x: Any) -> Any:
+    """Les entiers trop grands pour JavaScript (au-delà de 2^53) repartent en
+    texte : une très grande case de matrice garde ainsi tous ses chiffres."""
+    if isinstance(x, bool):
+        return x
+    if isinstance(x, int):
+        return str(x) if abs(x) >= _JS_MAX else x
+    if isinstance(x, list):
+        return [_js_safe(v) for v in x]
+    if isinstance(x, dict):
+        return {k: _js_safe(v) for k, v in x.items()}
+    return x
 
 
 def _err(message: str) -> JSONResponse:
@@ -115,23 +157,23 @@ def cipher(req: CipherRequest):
     try:
         if req.algo == "caesar":
             if req.shift is None:
-                return _err("Enter a shift (a positive integer).")
+                return _err("Indique un décalage (un entier positif).")
             trace = traces.caesar_trace(req.message, req.shift, req.direction, req.operation)
             warning = en.caesar_weak_key(req.shift)
         elif req.algo == "playfair":
             if not req.key or not req.key.strip():
-                return _err("Enter a keyword before running.")
+                return _err("Indique une clé (des lettres) avant de lancer.")
             trace = traces.playfair_trace(req.message, req.key, req.operation)
             warning = None
         elif req.algo == "hill":
             if req.matrix is None:
-                return _err("Fill the matrix before running.")
+                return _err("Remplis la matrice avant de lancer.")
             matrix = en.validate_matrix(req.matrix)
             trace = traces.hill_trace(req.message, matrix, req.operation)
             warning = en.hill_weak_key(matrix)
         else:
-            return _err(f"Unknown algorithm '{req.algo}'.")
-        return _ok(result=trace["result"], trace=trace, warning=warning)
+            return _err(f"Algorithme inconnu « {req.algo} ».")
+        return _ok(result=trace["result"], trace=_js_safe(trace), warning=warning)
     except ValueError as e:
         return _err(str(e))
 
@@ -148,6 +190,58 @@ def cipher_warning(req: WarningRequest):
         return _ok(warning=None)
     except ValueError as e:
         return _ok(warning=str(e))
+
+
+# ------------------------------------------- key exchange with RSA (P2) ----
+# Les grands nombres sont renvoyés en texte : en JavaScript, un nombre au-delà
+# de 2^53 perd sa précision.
+@app.post("/api/rsa/keygen")
+def rsa_keygen(req: KeygenRequest):
+    try:
+        k = rsa.generate_keypair(req.bits)
+    except ValueError as e:
+        return _err(str(e))
+    return _ok(key={name: (str(v) if name in ("p", "q", "n", "phi", "e", "d") else v)
+                    for name, v in k.items()})
+
+
+@app.post("/api/exchange/seal")
+def exchange_seal(req: SealRequest):
+    """L'expéditeur enferme {algo, clé} avec la clé publique (e, n) du destinataire."""
+    try:
+        n, e = rsa.parse_int(req.n, "n"), rsa.parse_int(req.e, "e")
+        payload = rsa.params_to_text(req.algo, req.shift, req.direction, req.key, req.matrix)
+        sealed = rsa.encrypt_text(payload, e, n)
+    except ValueError as ex:
+        return _err(str(ex))
+    return _ok(
+        payload=payload,
+        blockBytes=sealed["blockBytes"],
+        blocks=[{"text": b["text"], "m": str(b["m"]), "c": str(b["c"])} for b in sealed["blocks"]],
+    )
+
+
+@app.post("/api/exchange/open")
+def exchange_open(req: OpenRequest):
+    """Le destinataire ouvre le coffre avec SA clé privée (d, n) et relit {algo, clé}."""
+    try:
+        n, d = rsa.parse_int(req.n, "n"), rsa.parse_int(req.d, "d")
+        cipher = [rsa.parse_int(c, "un bloc chiffré") for c in req.blocks]
+        opened = rsa.decrypt_blocks(cipher, d, n)
+        params = rsa.text_to_params(opened["text"])
+    except ValueError as ex:
+        return _err(str(ex))
+    # les nombres de la clé repartent en texte : un grand décalage ou une grande
+    # case de matrice garde ainsi tous ses chiffres côté JavaScript
+    if "shift" in params:
+        params["shift"] = str(params["shift"])
+    if "matrix" in params:
+        params["matrix"] = [[str(v) for v in row] for row in params["matrix"]]
+    return _ok(
+        payload=opened["text"],
+        blocks=[{"c": str(b["c"]), "m": str(b["m"]), "text": b["text"]} for b in opened["blocks"]],
+        params=params,
+    )
 
 
 # -------------------------------------------------------- passwords (P3) ----

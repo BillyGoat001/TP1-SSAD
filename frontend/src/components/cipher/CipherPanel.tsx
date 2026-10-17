@@ -53,7 +53,8 @@ export default function CipherPanel() {
   const [shift, setShift] = useState(3)
   const [direction, setDirection] = useState<'right' | 'left'>('right')
   const [playfairKey, setPlayfairKey] = useState('MONARCHY')
-  const [matrix, setMatrix] = useState<number[][]>([[3, 3], [2, 5]])
+  // les cases restent en texte : un très grand nombre garde tous ses chiffres jusqu'au backend
+  const [matrix, setMatrix] = useState<string[][]>([['3', '3'], ['2', '5']])
   const [matrixValid, setMatrixValid] = useState(true)
 
   const [resp, setResp] = useState<CipherResponse | null>(null)
@@ -165,9 +166,10 @@ export default function CipherPanel() {
 
         {algo === 'hill' && (
           <HillMatrixInput
-            matrix={matrix}
-            onChange={(nums, valid) => {
-              setMatrix(nums)
+            matrix={[]}
+            cells={matrix}
+            onChange={(_nums, valid, cells) => {
+              setMatrix(cells)
               setMatrixValid(valid)
             }}
           />

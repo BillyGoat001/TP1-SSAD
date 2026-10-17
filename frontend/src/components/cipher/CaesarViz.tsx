@@ -3,11 +3,14 @@ import type { CaesarTrace } from '../../types'
 interface Props {
   trace: CaesarTrace
   index: number
+  showResult?: boolean // sous chaque lettre, son résultat (partie Échange)
 }
+
+const show = (ch: string) => (ch === ' ' ? '␣' : ch === '\n' ? '↵' : ch)
 
 // Two aligned alphabet rows (plain -> shifted). Walking the message, each letter
 // lights up its column, and the shifted letter below it is the result.
-export default function CaesarViz({ trace, index }: Props) {
+export default function CaesarViz({ trace, index, showResult = false }: Props) {
   const current = index >= 0 ? trace.steps[index] : null
   const highlightCol = current && current.type === 'map' ? current.index! : null
 
@@ -42,25 +45,43 @@ export default function CaesarViz({ trace, index }: Props) {
       )}
       {current && current.type === 'skip' && (
         <div className="focus muted">
-          « {current.char === ' ' ? 'espace' : current.char} » n'est pas une lettre → inchangé
+          « {current.char === ' ' ? 'espace' : current.char === '\n' ? 'retour à la ligne' : current.char} » n'est pas une lettre → inchangé
         </div>
       )}
 
-      <div className="tiles">
-        {trace.steps.map((s, i) => (
-          <span
-            key={i}
-            className={
-              'tile' +
-              (i < index ? ' done' : '') +
-              (i === index ? ' current' : '') +
-              (s.type === 'skip' ? ' skip' : '')
-            }
-          >
-            {s.char === ' ' ? '␣' : s.char}
-          </span>
-        ))}
-      </div>
+      {showResult ? (
+        <div className="tiles tiles-io">
+          {trace.steps.map((s, i) => {
+            const out = s.type === 'map' ? s.out! : s.char
+            return (
+              <div key={i} className="tile-io">
+                <span className={'tile' + (i < index ? ' done' : '') + (i === index ? ' current' : '') + (s.type === 'skip' ? ' skip' : '')}>
+                  {show(s.char)}
+                </span>
+                <span className={'tile tile-out' + (i <= index ? ' is-shown' : '') + (i === index ? ' is-current' : '') + (s.type === 'skip' ? ' skip' : '')}>
+                  {i <= index ? show(out) : ''}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="tiles">
+          {trace.steps.map((s, i) => (
+            <span
+              key={i}
+              className={
+                'tile' +
+                (i < index ? ' done' : '') +
+                (i === index ? ' current' : '') +
+                (s.type === 'skip' ? ' skip' : '')
+              }
+            >
+              {show(s.char)}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

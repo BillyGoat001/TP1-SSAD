@@ -34,11 +34,11 @@ def caesar_decrypt(text, shift, direction="right"):
 
 def caesar_weak_key(shift):
     if shift % CAESAR_ALPHABET == 0:
-        return ("Zero shift (key = 0 or a multiple of 26): the message would "
-                "come out identical to the original; it would not be encrypted.")
+        return ("Décalage nul (clé = 0 ou un multiple de 26) : le message "
+                "ressortirait identique, il ne serait pas chiffré.")
     if shift % CAESAR_ALPHABET == 13:
-        return ("Key 13 (ROT13) is weak: applying it twice brings back the "
-                "original message, and it is a well-known convention.")
+        return ("La clé 13 (ROT13) est faible : l'appliquer deux fois redonne "
+                "le message d'origine, et c'est une convention très connue.")
     return None
 
 
@@ -60,7 +60,7 @@ def _playfair_pos(matrix, ch):
         for c in range(5):
             if matrix[r][c] == ch:
                 return r, c
-    raise ValueError(f"The letter '{ch}' is missing in the alphabet")
+    raise ValueError(f"La lettre « {ch} » n'existe pas dans la grille.")
 
 
 def _playfair_clean(text):
@@ -153,8 +153,8 @@ def matrix_mod_inverse(mat, m=MOD):
     det_inv = _mod_inverse(det, m)
     if det_inv is None:
         raise ValueError(
-            f"Invalid key: its determinant ({det}) shares a factor with {m}, "
-            f"so the matrix has no inverse mod {m}.")
+            f"Clé invalide : son déterminant ({det}) a un facteur commun avec {m}, "
+            f"la matrice n'a donc pas d'inverse modulo {m}.")
     cof = [[(-1) ** (i + j) * _determinant(_minor(mat, i, j)) for j in range(n)]
            for i in range(n)]
     adj = [[cof[j][i] for j in range(n)] for i in range(n)]
@@ -193,25 +193,25 @@ def parse_matrix(s):
     # Transform '3 3 2 5' (or '3,3;2,5') into a square matrix [[3,3],[2,5]].
     nums = [int(x) for x in s.replace(",", " ").replace(";", " ").split()]
     if not nums:
-        raise ValueError("Enter the matrix numbers, ex: 3 3 2 5")
+        raise ValueError("Saisis les nombres de la matrice, ex. 3 3 2 5")
     n = round(len(nums) ** 0.5)
     if n * n != len(nums):
         raise ValueError(
-            "The size of the key must form a square matrix (4 -> 2x2, 9 -> 3x3).")
+            "La clé doit former une matrice carrée (4 nombres → 2×2, 9 → 3×3).")
     return [nums[i * n:(i + 1) * n] for i in range(n)]
 
 
 def validate_matrix(matrix):
     """Check a matrix coming from the UI grid: square and made of integers."""
     if not matrix or not all(isinstance(row, list) for row in matrix):
-        raise ValueError("The matrix is empty.")
+        raise ValueError("La matrice est vide.")
     n = len(matrix)
     if any(len(row) != n for row in matrix):
-        raise ValueError("The matrix must be square (same number of rows and columns).")
+        raise ValueError("La matrice doit être carrée (autant de lignes que de colonnes).")
     for row in matrix:
         for v in row:
             if not isinstance(v, int):
-                raise ValueError("The matrix must contain whole numbers only.")
+                raise ValueError("La matrice ne doit contenir que des nombres entiers.")
     return matrix
 
 
@@ -219,15 +219,15 @@ def hill_weak_key(matrix):
     try:
         matrix_mod_inverse(matrix)
     except ValueError as e:
-        return f"{e} You can encrypt, but NOT decrypt."
+        return f"{e} Tu peux chiffrer, mais PAS déchiffrer."
     n = len(matrix)
     identity = [[1 if i == j else 0 for j in range(n)] for i in range(n)]
     if matrix == identity:
-        return ("Identity matrix: the message would come out identical to the "
-                "original; it would not be encrypted.")
+        return ("Matrice identité : le message ressortirait identique, il ne "
+                "serait pas chiffré.")
     off_diagonal_zero = all(matrix[i][j] == 0
                             for i in range(n) for j in range(n) if i != j)
     if off_diagonal_zero:
-        return ("Diagonal matrix: each letter would be encrypted separately, "
-                "which amounts to a very weak monoalphabetic cipher.")
+        return ("Matrice diagonale : chaque lettre serait chiffrée seule, ce qui "
+                "revient à une substitution monoalphabétique très faible.")
     return None

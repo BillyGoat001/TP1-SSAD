@@ -1,8 +1,16 @@
 # TP Sécurité — Application full-stack
 
 Démonstrateur de sécurité : **chiffrements animés** (César, Playfair, Hill),
-**attaques sur mots de passe** (force brute + dictionnaire) avec la protection,
-et **intégrité / authenticité** par HMAC-SHA256.
+**échange entre deux personnes avec RSA** (l'algo et la clé voyagent dans la
+boîte publique du destinataire), **attaques sur mots de passe** (force brute +
+dictionnaire) avec la protection, et **intégrité / authenticité** par HMAC-SHA256.
+
+L'onglet *Chiffrement* a deux parties : **Chiffrer un message** (un seul
+utilisateur, étapes animées) et **Échange entre deux personnes** : A et B
+génèrent chacun une vraie paire de clés RSA (32 à 2048 bits), échangent leurs
+clés publiques, puis s'envoient des messages. L'algo, la clé et le message
+chiffré sont enfermés avec la clé publique du destinataire ; lui seul les
+relit avec sa clé privée, puis déchiffre.
 
 - **Backend : Python (FastAPI)** — toute la logique (algorithmes, attaques,
   HMAC) est en Python, lisible par toute l'équipe. Le backend renvoie aussi la
@@ -14,6 +22,7 @@ tp_app/
 ├── backend/
 │   ├── encryption.py     # César, Playfair, Hill (Partie 1)
 │   ├── traces.py         # étapes d'animation (dérivées des chiffrements)
+│   ├── rsa_crypto.py     # RSA complet : Miller-Rabin, n, φ(n), e, d (Partie 2)
 │   ├── passwords.py      # attaques + protection (Partie 3)
 │   ├── integrity.py      # HMAC-SHA256 (Partie 4)
 │   ├── main.py           # API FastAPI + service du front buildé
@@ -83,5 +92,7 @@ cd backend
 python3 _selftest.py
 ```
 
-Vérifie les 3 chiffrements (aller-retour + traces), les attaques mots de passe,
-le hachage PBKDF2 et la détection d'altération HMAC.
+Vérifie les 3 chiffrements (aller-retour + traces), RSA (exemple de manuel,
+Miller-Rabin, génération de 32 à 2048 bits, coffre fermé / ouvert, mauvaise clé
+privée refusée, échange complet A → B par l'API), les attaques mots de passe, le
+hachage PBKDF2 et la détection d'altération HMAC.

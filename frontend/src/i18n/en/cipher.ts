@@ -2,7 +2,6 @@
 // visualisations, lecture pas à pas, historique)
 const cipher: Record<string, string> = {
   // ---- en-tête et onglets
-  'TP Sécurité — Chiffrement': 'Security Lab — Encryption',
   'TP Sécurité': 'Security Lab',
   'Chiffrement · Mots de passe · Intégrité': 'Encryption · Passwords · Integrity',
   'Chiffrement': 'Encryption',

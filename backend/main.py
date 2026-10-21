@@ -20,7 +20,7 @@ import gc
 import time
 from typing import Any, List, Literal, Optional, Union
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -32,6 +32,8 @@ import passwords as pw
 import integrity
 import rsa_crypto as rsa
 import storage
+import auth
+import captcha
 
 app = FastAPI(title="TP Security API")
 
@@ -44,6 +46,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+
+# ------------------------------------------------------------- connexion ----
+# Toute l'API (/api/…) exige une session ouverte, sauf /api/auth/* (se connecter) et
+# /api/health. Les fichiers de l'appli (la page de connexion elle-même) restent publics.
+@app.middleware("http")
+async def _guard(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and auth.auth_enabled() and not path.startswith("/api/auth/") and path != "/api/health":
+        if not auth.read_token(request.cookies.get(auth.COOKIE)):
+            return JSONResponse({"ok": False, "error": "Connexion requise.", "auth": False},
+                                status_code=401, headers={"Cache-Control": "no-store"})
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    if path.startswith("/api/auth/"):
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 # ----------------------------------------------------------------- models ----
@@ -528,6 +550,127 @@ def conversation_add(msg: ChatMessageIn):
 @app.delete("/api/conversation")
 def conversation_clear():
     return _ok(deleted=storage.conversation_clear())
+
+
+
+# -------------------------------------------------- connexion : routes /api/auth ----
+class LoginIn(BaseModel):
+    username: str = Field(max_length=60)
+    password: str = Field(max_length=200)
+    captcha_id: str = Field(max_length=100)
+    answer: Any = None                  # texte tapé, ou numéro du cadenas choisi
+    nonce: Any = None                   # le nombre trouvé pour la preuve de travail
+    human: Optional[dict] = None        # {ms: temps passé sur la page, events: gestes}
+
+
+_CAPTCHA_MSG = {
+    "wrong": "Défi raté. Un nouveau défi t'attend.",
+    "expired": "Le défi a expiré. Un nouveau défi t'attend.",
+    "unknown": "Le défi a expiré. Un nouveau défi t'attend.",
+    "pow": "Preuve de travail invalide. Un nouveau défi t'attend.",
+    "fast": "Trop rapide : prends le temps de regarder le défi.",
+}
+_gen: dict = {}                         # ip → instants des derniers captchas demandés
+
+
+def _ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    return (fwd.split(",")[0].strip() if fwd else "") or (request.client.host if request.client else "?")
+
+
+def _cookie_secure(request: Request) -> bool:
+    return request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https"
+
+
+@app.get("/api/health")
+def health():
+    return {"ok": True, "app": "tp-securite"}
+
+
+@app.get("/api/auth/status")
+def auth_status(request: Request):
+    user = auth.read_token(request.cookies.get(auth.COOKIE)) if auth.auth_enabled() else "dev"
+    return {"ok": True, "authenticated": bool(user), "user": user, "auth_required": auth.auth_enabled(),
+            "configured": bool(auth.load_users())}
+
+
+@app.get("/api/auth/captcha")
+def auth_captcha(request: Request, exclude: Optional[str] = None):
+    """Un nouveau défi (jamais deux fois la même sorte de suite). Limité : 40 par minute."""
+    ip, now = _ip(request), time.time()
+    recent = [t for t in _gen.get(ip, []) if now - t < 60]
+    if len(recent) >= 40:
+        return JSONResponse({"ok": False, "error": "Trop de demandes. Patiente un instant."}, status_code=429)
+    recent.append(now)
+    _gen[ip] = recent
+    if len(_gen) > 3000:
+        _gen.clear()
+    extra = len(auth.recent_failures("ip:" + ip))          # chaque échec récent alourdit la preuve de travail
+    return {"ok": True, "challenge": captcha.new_challenge(exclude=exclude if exclude in captcha.KINDS else None, extra_bits=extra)}
+
+
+class DiscardIn(BaseModel):
+    id: str = Field(max_length=100)
+
+
+@app.post("/api/auth/captcha/discard")
+def auth_captcha_discard(req: DiscardIn):
+    """La fenêtre a été fermée (ou le défi remplacé) : le défi est détruit côté serveur."""
+    return {"ok": True, "discarded": captcha.discard(req.id)}
+
+
+@app.post("/api/auth/login")
+def auth_login(req: LoginIn, request: Request):
+    if not auth.auth_enabled():
+        return JSONResponse({"ok": True, "user": "dev"})
+    ip = _ip(request)
+    ukey = "u:" + req.username.strip().lower()
+    wait = max(auth.locked_for("ip:" + ip), auth.locked_for(ukey))
+    if wait:
+        captcha.verify(req.captcha_id, None)                       # le défi est détruit quand même
+        return JSONResponse({"ok": False, "error": "locked", "retry_after": wait,
+                             "message": f"Trop de tentatives. Réessaie dans {wait} s."},
+                            status_code=429, headers={"Retry-After": str(wait)})
+    if not auth.load_users():
+        return JSONResponse({"ok": False, "error": "setup", "message": "Aucun compte n'est configuré sur ce serveur."},
+                            status_code=503)
+    # 1) le défi (usage unique)
+    why = captcha.verify(req.captcha_id, req.answer, req.nonce)
+    if why != "ok":
+        auth.record_failure("ip:" + ip)
+        return JSONResponse({"ok": False, "error": "captcha", "reason": why, "message": _CAPTCHA_MSG.get(why, _CAPTCHA_MSG["wrong"])},
+                            status_code=400)
+    # 2) le comportement : un humain reste un peu sur la page et fait des gestes
+    h = req.human or {}
+    try:
+        ms, events = float(h.get("ms", 0)), int(h.get("events", 0))
+    except (TypeError, ValueError):
+        ms, events = 0.0, 0
+    if ms < 1500 or events < 3:
+        auth.record_failure("ip:" + ip)
+        return JSONResponse({"ok": False, "error": "captcha", "reason": "robot",
+                             "message": "Comportement suspect : réessaie avec la souris ou le clavier."}, status_code=400)
+    # 3) les identifiants
+    user = auth.check_credentials(req.username, req.password)
+    if not user:
+        auth.record_failure("ip:" + ip)
+        auth.record_failure(ukey)
+        return JSONResponse({"ok": False, "error": "credentials", "message": "Identifiant ou mot de passe incorrect."},
+                            status_code=401)
+    auth.record_success("ip:" + ip)
+    auth.record_success(ukey)
+    resp = JSONResponse({"ok": True, "user": user})
+    resp.set_cookie(auth.COOKIE, auth.make_token(user), max_age=auth.SESSION_SECONDS, httponly=True,
+                    samesite="lax", secure=_cookie_secure(request), path="/")
+    return resp
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request):
+    auth.revoke_token(request.cookies.get(auth.COOKIE))
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(auth.COOKIE, path="/")
+    return resp
 
 
 # --------------------------------------------- serve the built frontend ----

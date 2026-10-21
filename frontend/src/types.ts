@@ -277,3 +277,37 @@ export interface ChatRecord {
   cipher: string
   params: ExchangeParams
 }
+
+// ---- connexion et captcha (voir backend/captcha.py)
+export type CaptchaKind = 'motion' | 'illusion' | 'shuffle'
+export interface Challenge {
+  id: string
+  kind: CaptchaKind
+  ttl: number                                   // secondes de validité
+  prompt: string                                // la consigne, en français
+  pow: { challenge: string; bits: number }      // la preuve de travail à fournir
+  // motion : un nuage de points dont le mouvement dessine 4 caractères
+  width?: number; height?: number
+  mask?: { w: number; h: number; bits: string }
+  fg_dir?: number; speed?: number; dots?: number; noise?: number
+  // illusion : une image de rayures
+  image?: string
+  // shuffle : la clé et les cadenas
+  slots?: number; start?: number; swaps?: [number, number, number][]; reveal_ms?: number
+}
+export interface LoginResult {
+  ok: boolean
+  status: number
+  user?: string
+  error?: 'captcha' | 'credentials' | 'locked' | 'setup' | string
+  reason?: string
+  message?: string
+  retry_after?: number
+}
+export interface AuthStatus {
+  ok: boolean
+  authenticated: boolean
+  user: string | null
+  auth_required: boolean
+  configured: boolean
+}

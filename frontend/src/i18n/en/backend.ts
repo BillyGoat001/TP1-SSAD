@@ -61,6 +61,8 @@ const UNIT: Record<string, [string, string]> = {
 const enNumber = (s: string) => s.replace(/[\s  ]/g, ',').replace(/,(?=\d{1,2}$)/, '.')
 
 export const BACKEND_PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
+  // verrouillage de la connexion : « Trop de tentatives. Réessaie dans 15 s. »
+  [/^Trop de tentatives\. Réessaie dans (\d+) s\.$/, (m) => `Too many attempts. Try again in ${m[1]} s.`],
   // durées
   [/^(\d+(?:,\d+)?) (s|min|h|j|jours?|mois|ans?|siècles?|millénaires?)$/, (m) => {
     const n = m[1].replace(',', '.')

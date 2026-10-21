@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 """Backend self-test: logic + all API endpoints. Run: python _selftest.py"""
+import os
+os.environ["TP_POW_BITS"] = "12"        # preuve de travail légère pour les tests
+os.environ["TP_AUTH_OFF"] = "1"        # les tests de l'API ci-dessous tournent sans connexion
 import encryption as en
 import traces
 import passwords as pw
@@ -409,5 +412,123 @@ assert r["ok"] and "alphabet" in r["warning"], r
 assert c.post("/api/cipher/warning", json={"algo": "playfair", "key": "MONARCHY"}).json()["warning"] is None
 assert c.post("/api/cipher/warning", json={"algo": "playfair"}).json()["warning"] is None
 print("Hill : permutation ; Playfair : grille de l'alphabet (26 clés) ; autres clés inchangées OK")
+
+# ---- connexion : comptes, sessions, captchas, protection de l'API ----
+section("Connexion")
+import time as _time
+import auth, captcha
+os.environ.pop("TP_AUTH_OFF", None)
+os.environ["USERS_FILE"] = os.path.join(tempfile.mkdtemp(), "users.json")     # comptes de test, pas les vrais
+auth.reset_limits()
+PW = "Mot-de-passe-de-test-42"
+with open(os.environ["USERS_FILE"], "w", encoding="utf-8") as f:
+    json.dump({"users": {"alice": auth.hash_password(PW)}}, f)
+# hachage : sel aléatoire, vérification, mauvais mot de passe, format cassé
+h1, h2 = auth.hash_password(PW), auth.hash_password(PW)
+assert h1 != h2 and auth.verify_password(PW, h1) and not auth.verify_password(PW + "x", h1)
+assert not auth.verify_password(PW, "n'importe quoi") and not auth.verify_password(PW, "md5$1$aa$bb")
+assert PW not in open(os.environ["USERS_FILE"], encoding="utf-8").read()                      # jamais en clair
+assert auth.check_credentials("Alice", PW) == "alice" and auth.check_credentials("alice", "faux") is None
+assert auth.check_credentials("inconnu", PW) is None
+# jeton de session : signé, expirant, falsifiable impossible, fermable
+tok = auth.make_token("alice")
+assert auth.read_token(tok) == "alice"
+assert auth.read_token(tok + "0") is None and auth.read_token("a.b.c") is None and auth.read_token("") is None
+u64, exp, jti, sig = tok.split(".")
+assert auth.read_token(f"{u64}.{int(exp) + 999999}.{jti}.{sig}") is None                              # date prolongée à la main
+assert auth.read_token(tok, now=_time.time() + auth.SESSION_SECONDS + 5) is None               # expiré
+assert auth.read_token(auth.make_token("bob")) is None                                          # compte inexistant
+auth.revoke_token(tok)
+assert auth.read_token(tok) is None
+print("hachage PBKDF2 sel/format · jeton signé, expirant, révocable OK")
+
+# captchas : chaque sorte, usage unique, expiration, preuve de travail, trop rapide
+seen = set()
+for _ in range(40):
+    ch = captcha.new_challenge()
+    seen.add(ch["kind"])
+    assert "answer" not in ch and "text" not in ch and "slot" not in ch and "secret" not in ch, ch.keys()
+assert seen == set(captcha.KINDS), seen
+last = captcha.new_challenge()["kind"]
+assert all(captcha.new_challenge(exclude=last)["kind"] != last for _ in range(30))              # jamais deux fois la même sorte
+def solved(ch, answer=None, wait=True):
+    a = captcha._answer_for_tests(ch["id"])
+    if wait:
+        captcha._store[ch["id"]]["born"] -= 60                                                # « le temps a passé »
+    return answer if answer is not None else (a["slot"] if a["kind"] == "shuffle" else a["text"])
+for k in captcha.KINDS:
+    while True:
+        ch = captcha.new_challenge()
+        if ch["kind"] == k:
+            break
+    nonce = captcha.solve_pow(ch["pow"]["challenge"], ch["pow"]["bits"])
+    assert captcha.verify(ch["id"], solved(ch), nonce) == "ok", k
+    assert captcha.verify(ch["id"], "x", nonce) == "unknown"                                      # usage unique
+    ch = captcha.new_challenge(); nonce = captcha.solve_pow(ch["pow"]["challenge"], ch["pow"]["bits"])
+    bad = solved(ch, "ZZZZ" if captcha._answer_for_tests(ch["id"])["kind"] != "shuffle" else 99)
+    assert captcha.verify(ch["id"], bad, nonce) == "wrong"                                        # mauvaise réponse : détruit aussi
+    assert captcha.verify(ch["id"], bad, nonce) == "unknown"
+ch = captcha.new_challenge(); good = solved(ch)
+assert captcha.verify(ch["id"], good, 0) == "pow"                                               # sans travail
+ch = captcha.new_challenge(); good = solved(ch, wait=False); nonce = captcha.solve_pow(ch["pow"]["challenge"], ch["pow"]["bits"])
+assert captcha.verify(ch["id"], good, nonce) == "fast"                                         # plus vite qu'un humain
+ch = captcha.new_challenge(); good = solved(ch)
+assert captcha.verify(ch["id"], good, 0, now=_time.time() + captcha.TTL + 5) == "expired"
+ch = captcha.new_challenge(); assert captcha.discard(ch["id"]) and not captcha.discard(ch["id"]) and captcha.verify(ch["id"], "x", 0) == "unknown"   # abandonné = détruit
+assert captcha.new_challenge(extra_bits=3)["pow"]["bits"] == captcha.POW_BASE_BITS + 3
+assert captcha.new_challenge(extra_bits=99)["pow"]["bits"] == captcha.POW_MAX_BITS == captcha.POW_BASE_BITS + 6
+print("3 captchas : réponse jamais envoyée · usage unique · expiration · preuve de travail · trop rapide OK")
+
+# l'API : fermée sans session, ouverte avec
+anon = TestClient(app)
+assert anon.get("/api/history").status_code == 401 and anon.post("/api/cipher", json={}).status_code == 401
+assert anon.get("/api/health").status_code == 200
+st = anon.get("/api/auth/status").json()
+assert st["authenticated"] is False and st["auth_required"] is True and st["configured"] is True
+def login(cl, user=PW and "alice", pwd=PW, answer=None, human=None, nonce_ok=True, wait=True):
+    chj = cl.get("/api/auth/captcha").json()["challenge"]
+    nonce = captcha.solve_pow(chj["pow"]["challenge"], chj["pow"]["bits"]) if nonce_ok else 0
+    ans = solved(chj, answer, wait)
+    return cl.post("/api/auth/login", json={"username": user, "password": pwd, "captcha_id": chj["id"], "answer": ans,
+                                            "nonce": nonce, "human": human or {"ms": 4000, "events": 9}})
+r = login(anon, answer="ZZZZ" if False else None, pwd="mauvais")
+assert r.status_code == 401 and r.json()["error"] == "credentials" and "incorrect" in r.json()["message"]
+r2 = login(anon, user="inconnu")
+assert r2.status_code == 401 and r2.json()["message"] == r.json()["message"]                  # même message : pas d'indice sur les noms
+r = anon.post("/api/auth/login", json={"username": "alice", "password": PW, "captcha_id": "nimporte", "answer": "x", "nonce": 1,
+                                       "human": {"ms": 4000, "events": 9}})
+assert r.status_code == 400 and r.json()["reason"] == "unknown"
+r = login(anon, human={"ms": 200, "events": 0})
+assert r.status_code == 400 and r.json()["reason"] == "robot"                                   # aucun geste, aucun temps
+auth.reset_limits()
+r = login(anon)
+assert r.status_code == 200 and r.json()["user"] == "alice", r.text
+ck = r.headers["set-cookie"]
+assert "HttpOnly" in ck and "SameSite=lax" in ck and "tp_session=" in ck, ck
+assert anon.get("/api/history").status_code == 200
+assert anon.get("/api/auth/status").json()["user"] == "alice"
+anon.post("/api/auth/logout")
+assert anon.get("/api/history").status_code == 401                                              # session fermée
+stolen = TestClient(app); stolen.cookies.set("tp_session", tok := auth.make_token("alice"))
+assert stolen.get("/api/history").status_code == 200
+auth.revoke_token(tok)
+assert stolen.get("/api/history").status_code == 401                                            # jeton révoqué
+forged = TestClient(app); forged.cookies.set("tp_session", "YWxpY2U.9999999999.aabbcc.deadbeef")
+assert forged.get("/api/history").status_code == 401
+print("API fermée sans session · cookie HttpOnly · déconnexion · jeton révoqué/falsifié refusés OK")
+
+# trop d'essais : attente de plus en plus longue
+auth.reset_limits()
+bf = TestClient(app)
+for i in range(auth.FREE_FAILS):
+    assert login(bf, pwd="faux" + str(i)).status_code == 401
+r = login(bf, pwd=PW)                                                                          # même avec le BON mot de passe
+assert r.status_code == 429 and r.json()["error"] == "locked" and r.json()["retry_after"] >= 1, r.text
+assert auth.locked_for("u:alice") > 0
+auth.reset_limits()
+assert login(bf).status_code == 200
+print("verrouillage après", auth.FREE_FAILS, "échecs OK")
+os.environ["TP_AUTH_OFF"] = "1"
+auth.reset_limits()
 
 print("\nALL BACKEND TESTS PASSED")

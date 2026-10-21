@@ -6,7 +6,13 @@ import type {
   CasesResponse, ValidateResult, Rules, IntegrityDemo,
   KeygenResponse, ExchangeParams, SealResponse, OpenResponse,
   HistoryEntry, HistoryDraft, ChatRecord, PwHistoryEntry, PwHistoryDraft,
+  Challenge, LoginResult, AuthStatus,
 } from './types'
+
+// Session expirée (le serveur répond 401) : l'appli revient sur la page de connexion.
+let onUnauthorized: (() => void) | null = null
+export const setUnauthorizedHandler = (fn: (() => void) | null) => { onUnauthorized = fn }
+const guard = (res: Response) => { if (res.status === 401) onUnauthorized?.() }
 
 async function post<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -14,16 +20,19 @@ async function post<T>(url: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+  guard(res)
   return (await res.json()) as T
 }
 
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(url)
+  guard(res)
   return (await res.json()) as T
 }
 
 async function del<T>(url: string): Promise<T> {
   const res = await fetch(url, { method: 'DELETE' })
+  guard(res)
   return (await res.json()) as T
 }
 
@@ -43,6 +52,35 @@ export interface CipherInput {
 }
 
 export const api = {
+  // ---- connexion (le cookie de session est HttpOnly : le JavaScript ne le voit jamais)
+  authStatus: async () => (await (await fetch('/api/auth/status')).json()) as AuthStatus,
+  authCaptcha: async (exclude?: string) => {
+    const res = await fetch('/api/auth/captcha' + (exclude ? `?exclude=${encodeURIComponent(exclude)}` : ''))
+    const body = await res.json()
+    if (!res.ok || !body.ok) throw new Error(body.error || 'captcha')
+    return body.challenge as Challenge
+  },
+  // le défi est abandonné (fenêtre fermée, défi remplacé) : le serveur le détruit
+  authDiscard: (id: string) => {
+    try {
+      void fetch('/api/auth/captcha/discard', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }), keepalive: true,
+      }).catch(() => undefined)
+    } catch { /* ignore */ }
+  },
+  login: async (payload: {
+    username: string; password: string; captcha_id: string; answer: string | number; nonce: number
+    human: { ms: number; events: number }
+  }): Promise<LoginResult> => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    })
+    let body: Partial<LoginResult> = {}
+    try { body = await res.json() } catch { /* réponse vide */ }
+    return { ok: false, ...body, status: res.status } as LoginResult
+  },
+  logout: async () => { try { await fetch('/api/auth/logout', { method: 'POST' }) } catch { /* ignore */ } },
+
   cipher: (input: CipherInput) => post<CipherResponse>('/api/cipher', input),
 
   // Échange A ↔ B : vraie paire de clés RSA, coffre fermé avec la clé publique
@@ -68,6 +106,7 @@ export const api = {
 
   cases: async () => {
     const res = await fetch('/api/passwords/cases')
+    guard(res)
     return (await res.json()) as CasesResponse
   },
 

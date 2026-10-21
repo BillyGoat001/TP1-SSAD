@@ -6,10 +6,11 @@ import limits from './en/limits'
 import exchange from './en/exchange'
 import passwords from './en/passwords'
 import integrity from './en/integrity'
+import auth from './en/auth'
 import backend, { BACKEND_PATTERNS } from './en/backend'
 
 export const EN: Record<string, string> = {
-  ...cipher, ...files, ...limits, ...exchange, ...passwords, ...integrity, ...backend,
+  ...cipher, ...files, ...limits, ...exchange, ...passwords, ...integrity, ...auth, ...backend,
 }
 
 export const PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [...BACKEND_PATTERNS]

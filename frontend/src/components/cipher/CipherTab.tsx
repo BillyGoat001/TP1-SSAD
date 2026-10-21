@@ -1,5 +1,6 @@
 import CipherPanel from './CipherPanel'
 import ExchangePanel from '../exchange/ExchangePanel'
+import { t } from '../../i18n'
 
 export type Part = 'simple' | 'exchange'
 
@@ -10,20 +11,20 @@ export type Part = 'simple' | 'exchange'
 export default function CipherTab({ part, onPart }: { part: Part; onPart: (p: Part) => void }) {
   return (
     <div className="cipher-tab">
-      <div className="subtabs" role="tablist" aria-label="Parties du chiffrement">
+      <div className="subtabs" role="tablist" aria-label={t('Parties du chiffrement')}>
         <button
           role="tab" aria-selected={part === 'simple'}
           className={'subtab' + (part === 'simple' ? ' is-active' : '')}
           onClick={() => onPart('simple')}
         >
-          Chiffrer un message
+          {t('Chiffrer un message')}
         </button>
         <button
           role="tab" aria-selected={part === 'exchange'}
           className={'subtab' + (part === 'exchange' ? ' is-active' : '')}
           onClick={() => onPart('exchange')}
         >
-          Échange entre deux personnes
+          {t('Échange entre deux personnes')}
         </button>
       </div>
 

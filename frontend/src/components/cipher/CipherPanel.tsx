@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import type { Algo, Operation, CipherResponse, Trace } from '../../types'
+import type { Algo, Operation, CipherResponse, Trace, HistoryEntry, HistoryDraft } from '../../types'
 import { api, type CipherInput } from '../../api'
 import { usePlayback } from './usePlayback'
 import Playback from './Playback'
@@ -8,12 +8,44 @@ import CaesarViz from './CaesarViz'
 import PlayfairViz from './PlayfairViz'
 import HillViz from './HillViz'
 import HillMatrixInput from './HillMatrixInput'
+import History, { fmtTime } from './History'
+import LimitsFlaws from './LimitsFlaws'
+import { FilePicker, FileNotice, type FileNote } from './FilePick'
+import { readTextFile, checkCaesarKey, checkPlayfairKey, checkHillKey, checkMessage } from './fileImport'
+import { t, _t } from '../../i18n'
 
 const ALGOS: { id: Algo; label: string }[] = [
-  { id: 'caesar', label: 'César' },
+  { id: 'caesar', label: _t('César') },
   { id: 'playfair', label: 'Playfair' },
   { id: 'hill', label: 'Hill' },
 ]
+
+type Dir = 'right' | 'left'
+
+// Tout ce qui définit « l'algorithme + la clé » d'une station.
+interface Params {
+  algo: Algo
+  shift: string
+  direction: Dir
+  playfairKey: string
+  matrix: string[][]
+  matrixValid: boolean
+}
+
+// Métadonnées rangées à côté du chiffré (jamais dedans) pour restituer
+// espaces / ponctuation (layout), X de bourrage (fillers), J (jmap) et minuscules (cases).
+interface Meta {
+  layout: [number, string][]
+  fillers: number[]
+  jmap: number[]
+  cases: number[]
+}
+
+// Un chiffré produit dans la session : avec quelle clé, et ses métadonnées.
+interface Entry {
+  params: Params
+  meta: Meta
+}
 
 function runningOutput(trace: Trace, index: number): string {
   if (index < 0) return ''
@@ -47,175 +79,360 @@ const EyeOff = () => (
   </svg>
 )
 
-export default function CipherPanel() {
+// ---------------------------------------------------------------- helpers ----
+
+// Saisie du message clair : accents retirés, MAJUSCULES/minuscules gardées telles que tapées.
+const stripAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+// Saisie d'un chiffré : toujours en majuscules.
+const clean = (s: string) => stripAccents(s).toUpperCase()
+
+const mod26 = (n: bigint) => ((n % 26n) + 26n) % 26n
+
+// Identité « mathématique » d'une clé : deux clés différentes à l'écran mais
+// équivalentes (décalage 3 et 29, « MONARCHY » et « monarchy »…) donnent la même.
+function keyId(p: Params): string {
+  try {
+    if (p.algo === 'caesar') {
+      const s = mod26(BigInt(p.shift || '0'))
+      return 'c:' + (p.direction === 'right' ? s : mod26(-s))
+    }
+    if (p.algo === 'playfair') {
+      const seen: string[] = []
+      for (const ch of p.playfairKey.toUpperCase().replace(/J/g, 'I') + 'ABCDEFGHIKLMNOPQRSTUVWXYZ')
+        if (/[A-Z]/.test(ch) && !seen.includes(ch)) seen.push(ch)
+      return 'p:' + seen.join('')
+    }
+    return 'h:' + p.matrix.length + ':' + p.matrix.map((r) => r.map((v) => String(mod26(BigInt(v)))).join(',')).join(';')
+  } catch {
+    return 'x:' + JSON.stringify(p)
+  }
+}
+
+// La clé en texte lisible, pour l'historique.
+function keyLabel(p: Params): string {
+  if (p.algo === 'caesar') return `${p.shift} (${p.direction === 'right' ? 'droite' : 'gauche'})`
+  if (p.algo === 'playfair') return p.playfairKey.trim().toUpperCase()
+  return '[' + p.matrix.map((r) => r.join(' ')).join(' ; ') + ']'
+}
+
+function validateParams(p: Params): string | null {
+  if (p.algo === 'caesar' && !/^\d+$/.test(p.shift)) return 'Indique le décalage : un nombre entier positif.'
+  if (p.algo === 'playfair' && !/[A-Z]/i.test(p.playfairKey)) return 'Indique la clé Playfair : au moins une lettre.'
+  if (p.algo === 'hill' && !p.matrixValid) return 'Chaque case de la matrice doit contenir un nombre (positif ou négatif).'
+  return null
+}
+
+function buildInput(p: Params, operation: Operation, message: string, meta?: Meta): CipherInput {
+  const base: CipherInput =
+    p.algo === 'caesar' ? { algo: p.algo, operation, message, shift: p.shift, direction: p.direction }
+      : p.algo === 'playfair' ? { algo: p.algo, operation, message, key: p.playfairKey }
+        : { algo: p.algo, operation, message, matrix: p.matrix }
+  return meta ? { ...base, layout: meta.layout, fillers: meta.fillers, jmap: meta.jmap, cases: meta.cases } : base
+}
+
+// ------------------------------------------------------------------ hooks ----
+
+// L'algorithme et la clé d'une station (les deux stations ont chacune la leur).
+function useKeyParams() {
   const [algo, setAlgo] = useState<Algo>('caesar')
-  const [message, setMessage] = useState('BONJOUR')
-  const [shift, setShift] = useState(3)
-  const [direction, setDirection] = useState<'right' | 'left'>('right')
-  const [playfairKey, setPlayfairKey] = useState('MONARCHY')
+  // clés vides au départ : le champ affiche son exemple (« ex. 3 ») et la matrice ses points
+  const [shift, setShift] = useState('')
+  const [direction, setDirection] = useState<Dir>('right')
+  const [playfairKey, setPlayfairKey] = useState('')
   // les cases restent en texte : un très grand nombre garde tous ses chiffres jusqu'au backend
-  const [matrix, setMatrix] = useState<string[][]>([['3', '3'], ['2', '5']])
-  const [matrixValid, setMatrixValid] = useState(true)
+  const [matrix, setMatrix] = useState<string[][]>([['', ''], ['', '']])
+  const [matrixValid, setMatrixValid] = useState(false)
+  // HillMatrixInput ne lit ses cases qu'au montage : on le remonte quand on charge une matrice
+  const [hillKey, setHillKey] = useState(0)
 
+  const snapshot = (): Params => ({ algo, shift, direction, playfairKey, matrix, matrixValid })
+  const load = (p: Params) => {
+    setAlgo(p.algo); setShift(p.shift); setDirection(p.direction); setPlayfairKey(p.playfairKey)
+    setMatrix(p.matrix); setMatrixValid(p.matrixValid); setHillKey((k) => k + 1)
+  }
+  return {
+    algo, shift, direction, playfairKey, matrix, hillKey,
+    setAlgo, setShift, setDirection, setPlayfairKey, setMatrix, setMatrixValid,
+    snapshot, load,
+  }
+}
+type KeyParams = ReturnType<typeof useKeyParams>
+
+// Démonstration + résultat d'une station (animation, lecture pas à pas, flou).
+function useDemo() {
   const [resp, setResp] = useState<CipherResponse | null>(null)
-  const [lastOp, setLastOp] = useState<Operation>('encrypt')
   const [revealed, setRevealed] = useState(false)
-  const [feeding, setFeeding] = useState(false)   // dissolve + ripple playing
-  const [showResult, setShowResult] = useState(false) // result only once it "exits"
+  const [feeding, setFeeding] = useState(false)       // dissolve + ripple en cours
+  const [showResult, setShowResult] = useState(false) // résultat seulement quand il « sort »
   const [animKey, setAnimKey] = useState(0)
-  const resultRef = useRef<HTMLDivElement>(null)
-
-  // Glide the screen to the result as it emerges, so it is seen without scrolling.
-  useEffect(() => {
-    if (showResult) resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [showResult])
+  const [input, setInput] = useState('')              // texte qui entre dans la démonstration
+  const timers = useRef<number[]>([])
 
   const trace = resp && resp.ok ? resp.trace : undefined
   const total = trace ? trace.steps.length : 0
   const pb = usePlayback(total)
   const atEnd = pb.index >= total - 1
-  const output = trace ? runningOutput(trace, pb.index) : ''
+  // pendant l'animation : le résultat se construit lettre par lettre ; à la fin,
+  // on affiche le résultat final du backend (déchiffrement = espaces retrouvés)
+  const liveOutput = trace ? runningOutput(trace, pb.index) : ''
+  const output = atEnd && resp && resp.ok && resp.result != null ? resp.result : liveOutput
 
-  function changeAlgo(a: Algo) {
-    setAlgo(a)
-    setResp(null)
-    setRevealed(false)
-    setFeeding(false)
-    setShowResult(false)
+  const cancel = () => {
+    timers.current.forEach((t) => window.clearTimeout(t))
+    timers.current = []
   }
-
-  function buildInput(op: Operation): CipherInput {
-    if (algo === 'caesar') return { algo, operation: op, message, shift, direction }
-    if (algo === 'playfair') return { algo, operation: op, message, key: playfairKey }
-    return { algo, operation: op, message, matrix }
+  const later = (fn: () => void, ms: number) => {
+    timers.current.push(window.setTimeout(fn, ms))
   }
+  useEffect(() => cancel, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function run(op: Operation) {
-    if (algo === 'hill' && !matrixValid) {
-      setResp({ ok: false, error: 'Chaque case de la matrice doit contenir un nombre (positif ou négatif).' })
-      return
-    }
-    setLastOp(op)
-    setRevealed(false)
-    setShowResult(false)
-    setFeeding(true)
+  const clear = () => {
+    cancel()
+    setResp(null); setRevealed(false); setFeeding(false); setShowResult(false)
+  }
+  const begin = (text: string) => {
+    cancel()
+    setInput(text); setRevealed(false); setShowResult(false); setFeeding(true)
     setAnimKey((k) => k + 1)
-    window.setTimeout(() => setShowResult(true), 1150) // reveal result as it emerges
-    window.setTimeout(() => setFeeding(false), 1500)
-    try {
-      setResp(await api.cipher(buildInput(op)))
-    } catch {
-      setResp({ ok: false, error: 'Backend injoignable. Lance le serveur Python.' })
-    }
   }
+  const fail = (error: string) => {
+    cancel()
+    setFeeding(false); setShowResult(false); setResp({ ok: false, error })
+  }
+  return {
+    resp, setResp, revealed, setRevealed, feeding, setFeeding, showResult, setShowResult,
+    animKey, input, trace, total, pb, atEnd, output, cancel, later, clear, begin, fail,
+  }
+}
+type Demo = ReturnType<typeof useDemo>
+
+// Flash vert d'un champ qui vient de recevoir un résultat, puis retour à la normale.
+function useFlash(ms = 1700) {
+  const [on, setOn] = useState(false)
+  const t = useRef<number | null>(null)
+  const fire = () => {
+    setOn(true)
+    if (t.current) window.clearTimeout(t.current)
+    t.current = window.setTimeout(() => setOn(false), ms)
+  }
+  useEffect(() => () => { if (t.current) window.clearTimeout(t.current) }, [])
+  return { on, fire }
+}
+
+// ------------------------------------------------------------- components ----
+
+// Algorithme + clé : exactement les mêmes champs des deux côtés.
+function KeyFields({ p, onEdit: onEditRaw }: { p: KeyParams; onEdit: () => void }) {
+  // résultat du dernier fichier de clé choisi (ok ou refusé) ; il disparaît dès qu'on touche à la clé
+  const [note, setNote] = useState<FileNote | null>(null)
+  const onEdit = () => { setNote(null); onEditRaw() }
+  useEffect(() => { setNote(null) }, [p.algo])
+
+  // UN fichier : son contenu doit être une clé valable pour l'algorithme choisi
+  async function pickKeyFile(file: File) {
+    const algo = p.algo
+    const read = await readTextFile(file)
+    if (!read.ok) return setNote({ ok: false, name: file.name, problem: read.problem })
+    const base = p.snapshot()
+    if (algo === 'caesar') {
+      const r = checkCaesarKey(read.value)
+      if (!r.ok) return setNote({ ok: false, name: file.name, problem: r.problem })
+      p.load({ ...base, shift: r.value })
+      setNote({ ok: true, name: file.name, info: r.info })
+    } else if (algo === 'playfair') {
+      const r = checkPlayfairKey(read.value)
+      if (!r.ok) return setNote({ ok: false, name: file.name, problem: r.problem })
+      p.load({ ...base, playfairKey: r.value })
+      setNote({ ok: true, name: file.name, info: r.info })
+    } else {
+      const r = checkHillKey(read.value)
+      if (!r.ok) return setNote({ ok: false, name: file.name, problem: r.problem })
+      p.load({ ...base, matrix: r.value, matrixValid: true })
+      setNote({ ok: true, name: file.name, info: r.info })
+    }
+    onEditRaw() // la clé a changé : on remet la démonstration à zéro
+  }
+
+  const keyName = p.algo === 'caesar' ? _t('clé César (un nombre positif)') : p.algo === 'playfair' ? _t('clé Playfair (des lettres)') : _t('clé Hill (une matrice)')
+
+  return (
+    <div className="cp-cfg">
+      <div className="field">
+        <span className="field-label">{t('Algorithme')}</span>
+        <div className="segmented">
+          {ALGOS.map((a) => (
+            <button
+              key={a.id} type="button" className={'seg' + (p.algo === a.id ? ' is-on' : '')}
+              onClick={() => { if (p.algo !== a.id) { p.setAlgo(a.id); onEdit() } }}
+            >
+              {t(a.label)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {p.algo === 'caesar' && (
+        <>
+          <div className="field">
+            <span className="field-label">{t('Direction')}</span>
+            <div className="segmented">
+              <button type="button" className={'seg' + (p.direction === 'right' ? ' is-on' : '')} onClick={() => { p.setDirection('right'); onEdit() }}>{t('Droite')}</button>
+              <button type="button" className={'seg' + (p.direction === 'left' ? ' is-on' : '')} onClick={() => { p.setDirection('left'); onEdit() }}>{t('Gauche')}</button>
+            </div>
+          </div>
+          <div className="field">
+            <span className="field-label">{t('Décalage')}</span>
+            {/* uniquement des chiffres ; le champ s'élargit avec le nombre, sans dépasser la carte */}
+            <input
+              className="text-input" type="text" inputMode="numeric" autoComplete="off"
+              placeholder={t('ex. 3')} value={p.shift}
+              style={{ width: `calc(${Math.max(7, p.shift.length + 1)}ch + 24px)`, maxWidth: '100%', fontFamily: 'var(--mono)' }}
+              onChange={(e) => {
+                p.setShift(e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, ''))
+                onEdit()
+              }}
+            />
+          </div>
+        </>
+      )}
+
+      {p.algo === 'playfair' && (
+        <div className="field grow">
+          <span className="field-label">{t('Clé (lettres)')}</span>
+          <input
+            className="text-input" value={p.playfairKey}
+            onChange={(e) => {
+              p.setPlayfairKey(e.target.value.replace(/[^a-zA-Z ]/g, '').toUpperCase())
+              onEdit()
+            }}
+            placeholder={t('ex. PLAYFAIR')}
+          />
+        </div>
+      )}
+
+      {p.algo === 'hill' && (
+        <HillMatrixInput
+          key={'h' + p.hillKey}
+          matrix={[]}
+          cells={p.matrix}
+          fit
+          onChange={(_nums, valid, cells) => {
+            const changed = JSON.stringify(cells) !== JSON.stringify(p.matrix)
+            p.setMatrix(cells)
+            p.setMatrixValid(valid)
+            if (changed) onEdit() // (à l'ouverture, la matrice reportée est identique : pas une modification)
+          }}
+        />
+      )}
+
+      <div className="field cp-file-field">
+        <FilePicker
+          label={_t('Clé depuis un fichier')}
+          onFile={pickKeyFile}
+        />
+      </div>
+      <FileNotice note={note} what={keyName} onClose={() => setNote(null)} />
+    </div>
+  )
+}
+
+interface StationProps {
+  kind: 'enc' | 'dec'
+  title: string
+  p: KeyParams
+  onEdit: () => void
+  inputLabel: string
+  inputPlaceholder?: string
+  inputValue: string
+  onInput: (v: string) => void
+  inputFresh: boolean
+  fileLabel: string
+  actionLabel: string
+  onAction: () => void
+  demo: Demo
+  outputLabel: string
+  outputPlaceholder: string
+  outputFresh: boolean
+}
+
+// Une station = le même squelette des deux côtés, ligne par ligne :
+// titre · algorithme+clé · champ d'entrée · bouton · démonstration floutée · champ de sortie.
+function Station({
+  kind, title, p, onEdit, inputLabel, inputPlaceholder, inputValue, onInput, inputFresh, fileLabel,
+  actionLabel, onAction, demo, outputLabel, outputPlaceholder, outputFresh,
+}: StationProps) {
+  const outRef = useRef<HTMLDivElement>(null)
+  const [msgNote, setMsgNote] = useState<FileNote | null>(null)  // dernier fichier de message choisi
+  const { resp, trace, showResult, revealed, feeding, pb, total, atEnd, output, animKey } = demo
+  const hasOutput = !!trace && showResult
+
+  // Glide the screen to the result as it emerges, so it is seen without scrolling.
+  useEffect(() => {
+    if (showResult) outRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [showResult])
 
   const copy = () => {
     if (output) navigator.clipboard?.writeText(output).catch(() => {})
   }
 
+  // UN fichier : son contenu doit être un message valable (texte, au moins une lettre A–Z)
+  async function pickMessageFile(file: File) {
+    const read = await readTextFile(file)
+    if (!read.ok) return setMsgNote({ ok: false, name: file.name, problem: read.problem })
+    const r = checkMessage(read.value, kind === 'enc')
+    if (!r.ok) return setMsgNote({ ok: false, name: file.name, problem: r.problem })
+    onInput(r.value)
+    setMsgNote({ ok: true, name: file.name, info: r.info })
+  }
+
   return (
-    <div className="panel">
-      <h2 className="panel-title">Chiffrement &amp; déchiffrement</h2>
-      <p className="panel-sub">
-        Choisis l'algorithme et la clé, écris ton message, puis chiffre. La
-        démonstration est floutée : à toi de la révéler pour voir les étapes.
-        Le calcul est fait par le backend Python.
-      </p>
+    <section className={'cp-station is-' + kind} aria-label={t(title)}>
+      <h3 className="cp-head">{kind === 'enc' ? '1' : '2'} · {t(title)}</h3>
 
-      <div className="controls">
-        <div className="field">
-          <span className="field-label">Algorithme</span>
-          <div className="segmented">
-            {ALGOS.map((a) => (
-              <button key={a.id} className={'seg' + (algo === a.id ? ' is-on' : '')} onClick={() => changeAlgo(a.id)}>
-                {a.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <KeyFields p={p} onEdit={onEdit} />
 
-        {algo === 'caesar' && (
-          <>
-            <div className="field">
-              <span className="field-label">Décalage</span>
-              <input
-                className="text-input small" type="number" min={0} value={shift}
-                onChange={(e) => setShift(Math.max(0, parseInt(e.target.value || '0', 10)))}
-              />
-            </div>
-            <div className="field">
-              <span className="field-label">Direction</span>
-              <div className="segmented">
-                <button className={'seg' + (direction === 'right' ? ' is-on' : '')} onClick={() => setDirection('right')}>Droite</button>
-                <button className={'seg' + (direction === 'left' ? ' is-on' : '')} onClick={() => setDirection('left')}>Gauche</button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {algo === 'playfair' && (
-          <div className="field grow">
-            <span className="field-label">Clé (lettres)</span>
-            <input
-              className="text-input" value={playfairKey}
-              onChange={(e) => setPlayfairKey(e.target.value.replace(/[^a-zA-Z ]/g, '').toUpperCase())}
-              placeholder="ex. PLAYFAIR"
-            />
-          </div>
-        )}
-
-        {algo === 'hill' && (
-          <HillMatrixInput
-            matrix={[]}
-            cells={matrix}
-            onChange={(_nums, valid, cells) => {
-              setMatrix(cells)
-              setMatrixValid(valid)
-            }}
-          />
-        )}
-      </div>
-
-      <div className="field">
-        <span className="field-label">Message clair</span>
+      <div className="field cp-input">
+        <span className="field-label">{t(inputLabel)}</span>
         <textarea
-          className="text-area" rows={2} value={message}
-          onChange={(e) =>
-            setMessage(e.target.value.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase())
-          }
+          className={'text-area cp-io' + (inputFresh ? ' is-fresh' : '')}
+          rows={2} value={inputValue} placeholder={inputPlaceholder && t(inputPlaceholder)}
+          onChange={(e) => { setMsgNote(null); onInput(kind === 'enc' ? stripAccents(e.target.value) : clean(e.target.value)) }}
         />
+        {/* icône « fichier » hors du champ, en bas à droite */}
+        <div className="cp-file-row">
+          <FilePicker label={fileLabel} onFile={pickMessageFile} />
+        </div>
+        <FileNotice note={msgNote} what={_t('message')} onClose={() => setMsgNote(null)} />
       </div>
 
-      <div className="btn-row cipher-actions">
-        <button className="btn btn-accent" onClick={() => run('encrypt')}>Chiffrer ↓</button>
-        <button className="btn btn-accent" onClick={() => run('decrypt')}>Déchiffrer ↓</button>
+      <div className="cp-act">
+        <button className="btn btn-accent" onClick={onAction}>{t(actionLabel)}</button>
+        {resp && !resp.ok && <div className="warn error" role="alert">⚠ {t(resp.error)}</div>}
+        {resp && resp.ok && resp.warning && <div className="warn">⚠ {t(resp.warning)}</div>}
       </div>
 
-      {resp && !resp.ok && <div className="warn error">⚠ {resp.error}</div>}
-      {resp && resp.ok && resp.warning && <div className="warn">⚠ {resp.warning}</div>}
-
-      {trace && (
-        <div className={'demo-box' + (revealed ? '' : ' blurred') + (feeding ? ' feeding' : '')}>
+      {trace ? (
+        <div className={'demo-box cp-demo' + (revealed ? '' : ' blurred') + (feeding ? ' feeding' : '')}>
           <button
             className="blur-toggle"
-            onClick={() => setRevealed((r) => !r)}
-            aria-label={revealed ? 'Flouter' : 'Déflouter'}
-            title={revealed ? 'Flouter' : 'Déflouter'}
+            onClick={() => demo.setRevealed((r) => !r)}
+            aria-label={revealed ? t('Flouter') : t('Déflouter')}
+            title={revealed ? t('Flouter') : t('Déflouter')}
           >
             {revealed ? <EyeOff /> : <EyeOpen />}
           </button>
 
           {feeding && (
             <>
-              <Letters key={'d' + animKey} className="msg-dissolve" text={(message || ' ').toUpperCase()} />
+              <Letters key={'d' + animKey} className="msg-dissolve" text={(demo.input || ' ').toUpperCase()} />
               <div key={'r' + animKey} className="fog-ripple" />
             </>
           )}
 
           <div className="demo-content">
-            {trace.kind === 'caesar' && <CaesarViz trace={trace} index={pb.index} />}
-            {trace.kind === 'playfair' && <PlayfairViz trace={trace} index={pb.index} original={message} />}
-            {trace.kind === 'hill' && <HillViz trace={trace} index={pb.index} original={message} />}
+            {trace.kind === 'caesar' && <CaesarViz trace={trace} index={pb.index} showResult />}
+            {trace.kind === 'playfair' && <PlayfairViz trace={trace} index={pb.index} original={demo.input} showResult />}
+            {trace.kind === 'hill' && <HillViz trace={trace} index={pb.index} original={demo.input} showResult />}
 
             {revealed && (
               <>
@@ -223,22 +440,232 @@ export default function CipherPanel() {
                   playing={pb.playing} speed={pb.speed} setSpeed={pb.setSpeed}
                   play={pb.play} pause={pb.pause} step={pb.step} reset={pb.reset} atEnd={atEnd}
                 />
-                <div className="step-counter">Étape {Math.max(0, pb.index + 1)} / {total}</div>
+                <div className="step-counter">{t('Étape {i} / {n}', { i: Math.max(0, pb.index + 1), n: total })}</div>
               </>
             )}
           </div>
         </div>
+      ) : (
+        <div className="demo-box cp-demo is-empty">{t('La démonstration pas à pas apparaîtra ici (floutée).')}</div>
       )}
 
-      {trace && showResult && (
-        <div className="sortie" ref={resultRef} key={'s' + animKey}>
-          <span className="output-label">
-            {lastOp === 'encrypt' ? 'Message chiffré' : 'Message déchiffré'}
-          </span>
-          <Letters className="result-text result-materialize" text={output || '—'} />
-          <button className="btn tiny" onClick={copy}>Copier</button>
+      <div className="field cp-output">
+        <div className="cp-label-row">
+          <span className="field-label">{t(outputLabel)}</span>
+          {hasOutput && resp && resp.ok && resp.time_us != null && (
+            <span className="cp-time" title={t("Temps de calcul de l'algorithme (backend), hors animation et réseau")}>
+              ⏱ {fmtTime(resp.time_us)}
+            </span>
+          )}
         </div>
-      )}
+        <div className={'cp-io cp-out' + (outputFresh ? ' is-fresh' : '')} ref={outRef}>
+          {hasOutput
+            ? <Letters key={'s' + animKey} className="result-text result-materialize" text={output || '—'} />
+            : <span className="cp-placeholder">{t(outputPlaceholder)}</span>}
+          <button className="btn tiny" onClick={copy} disabled={!hasOutput}>{t('Copier')}</button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ------------------------------------------------------------------ panel ----
+
+export default function CipherPanel() {
+  const [message, setMessage] = useState('BONJOUR')     // clair (station 1)
+  const [cipherIn, setCipherIn] = useState('')          // chiffré reçu (station 2)
+  const left = useKeyParams()
+  const right = useKeyParams()
+  const enc = useDemo()
+  const dec = useDemo()
+  const stationsRef = useRef<HTMLDivElement>(null)
+  const cipherFlash = useFlash()   // le chiffré arrive dans le champ de la station 2
+  const encFlash = useFlash()      // le chiffré sort de la station 1
+  const decFlash = useFlash()      // le clair sort de la station 2
+
+  // Les champs de message (clair à gauche, chiffré à droite) grandissent avec le texte, comme dans
+  // l'échange A↔B, et gardent TOUJOURS la même hauteur des deux côtés pour que les stations restent alignées.
+  useLayoutEffect(() => {
+    const fit = () => {
+      const tas = Array.from(stationsRef.current?.querySelectorAll<HTMLTextAreaElement>('.cp-input textarea') ?? [])
+      tas.forEach((t) => { t.style.height = 'auto' })
+      const h = Math.max(0, ...tas.map((t) => t.scrollHeight + 2))
+      tas.forEach((t) => { t.style.height = `${h}px` })
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [message, cipherIn])
+
+  // table des chiffrés produits dans la session (clé = bloc chiffré, lettres seules) :
+  // on y retrouve avec quel algo/clé il a été fait + ses métadonnées (espaces, X, J).
+  const memo = useRef<Map<string, Entry[]>>(new Map())
+
+  // historique des opérations réussies (la plus récente en premier), rangé dans un fichier du backend
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+  const localId = useRef(0) // numéros négatifs : lignes que le backend n'a pas pu enregistrer
+
+  const reloadHistory = () =>
+    api.historyList()
+      .then((r) => { if (r.ok) setHistory(r.entries) })
+      .catch(() => {})
+
+  // au chargement : on retrouve l'historique déjà enregistré
+  useEffect(() => {
+    let alive = true
+    api.historyList()
+      .then((r) => {
+        if (!alive || !r.ok) return
+        // (une ligne ajoutée entre-temps reste devant)
+        setHistory((h) => {
+          const known = new Set(h.map((e) => e.id))
+          return [...h, ...r.entries.filter((e) => !known.has(e.id))]
+        })
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const logOp = async (op: Operation, clear: string, cipher: string, p: Params, timeUs: number | null | undefined) => {
+    const draft: HistoryDraft = {
+      op, clear, cipher,
+      algo: p.algo, algoLabel: ALGOS.find((a) => a.id === p.algo)!.label,
+      key: keyLabel(p), timeUs: timeUs ?? null,
+    }
+    let entry: HistoryEntry
+    try {
+      const r = await api.historyAdd(draft)
+      entry = r.ok ? r.entry : { ...draft, id: -(++localId.current) }
+    } catch {
+      entry = { ...draft, id: -(++localId.current) } // backend injoignable : la ligne reste visible, sans être enregistrée
+    }
+    setHistory((h) => [entry, ...h])
+  }
+
+  // supprime UNE ligne (à l'écran tout de suite, puis dans le fichier)
+  const removeOp = (id: number) => {
+    setHistory((h) => h.filter((e) => e.id !== id))
+    if (id > 0) api.historyRemove(id).then((r) => { if (!r.ok) reloadHistory() }).catch(reloadHistory)
+  }
+  const clearHistory = () => {
+    setHistory([])
+    api.historyClear().then((r) => { if (!r.ok) reloadHistory() }).catch(reloadHistory)
+  }
+
+  async function encrypt() {
+    // mêmes garde-fous que l'échange : un champ vide affiche un message clair
+    if (!/[A-Za-z]/.test(message)) return enc.fail('Écris un message (au moins une lettre).')
+    const params = left.snapshot()
+    const bad = validateParams(params)
+    if (bad) return enc.fail(bad)
+
+    const t0 = Date.now()
+    enc.begin(message)
+    let r: CipherResponse
+    try {
+      r = await api.cipher(buildInput(params, 'encrypt', message))
+    } catch {
+      return enc.fail('Backend injoignable. Lance le serveur Python.')
+    }
+    if (!r.ok || r.result == null) return enc.fail(r.error ?? 'Le chiffrement a échoué.')
+    enc.setResp(r)
+
+    // on retient, pour ce chiffré, de quoi le ramener exactement au clair
+    const cipher = r.result
+    const meta: Meta = { layout: r.layout ?? [], fillers: r.fillers ?? [], jmap: r.jmap ?? [], cases: r.cases ?? [] }
+    const id = keyId(params)
+    const others = (memo.current.get(cipher) ?? []).filter((e) => keyId(e.params) !== id)
+    memo.current.set(cipher, [...others, { params, meta }])
+
+    // le chiffré sort de la boîte (1,15 s), puis « part » vers la station 2 :
+    // même algo + même clé recopiés (modifiables), flash vert, démonstration de droite remise à zéro
+    const wait = Math.max(0, 1150 - (Date.now() - t0))
+    enc.later(() => {
+      enc.setShowResult(true)
+      encFlash.fire()
+      logOp('encrypt', message, cipher, params, r.time_us)
+      setCipherIn(cipher)
+      right.load(params)
+      dec.clear()
+      cipherFlash.fire()
+    }, wait)
+    enc.later(() => enc.setFeeding(false), wait + 350)
+  }
+
+  async function decrypt() {
+    const text = cipherIn
+    const letters = text.replace(/[^A-Z]/g, '')
+    if (!letters) return dec.fail("Il n'y a rien à déchiffrer : chiffre d'abord un message, ou colle un message chiffré.")
+    const params = right.snapshot()
+    const bad = validateParams(params)
+    if (bad) return dec.fail(bad)
+
+    // ce chiffré vient-il de cette session ? alors on sait avec quoi il a été fait
+    let meta: Meta | undefined
+    const entries = memo.current.get(letters)
+    if (entries) {
+      const mine = keyId(params)
+      const hit = entries.find((e) => keyId(e.params) === mine)
+      if (!hit) {
+        const made = entries[entries.length - 1].params
+        return dec.fail(made.algo !== params.algo ? "Ce n'est pas le bon algorithme." : "Ce n'est pas la bonne clé.")
+      }
+      meta = hit.meta
+    }
+    // avec métadonnées : on déchiffre le bloc de lettres seul (les positions en dépendent)
+    const sent = meta ? letters : text
+
+    const t0 = Date.now()
+    dec.begin(sent)
+    let r: CipherResponse
+    try {
+      r = await api.cipher(buildInput(params, 'decrypt', sent, meta))
+    } catch {
+      return dec.fail('Backend injoignable. Lance le serveur Python.')
+    }
+    if (!r.ok) return dec.fail(r.error ?? 'Le déchiffrement a échoué.')
+    dec.setResp(r)
+
+    const wait = Math.max(0, 1150 - (Date.now() - t0))
+    dec.later(() => {
+      dec.setShowResult(true); decFlash.fire()
+      logOp('decrypt', r.result ?? '', sent, params, r.time_us)
+    }, wait)
+    dec.later(() => dec.setFeeding(false), wait + 350)
+  }
+
+  return (
+    <div className="cp-page">
+      <div className="panel">
+        <h2 className="panel-title">{t('Chiffrement & déchiffrement')}</h2>
+
+        <div className="cp-stations" ref={stationsRef}>
+          <Station
+            kind="enc" title="Chiffrer"
+            p={left} onEdit={enc.clear}
+            inputLabel="Message clair" inputValue={message} onInput={setMessage} inputFresh={false}
+            fileLabel="Message depuis un fichier"
+            actionLabel="Chiffrer ↓" onAction={encrypt}
+            demo={enc}
+            outputLabel="Message chiffré" outputPlaceholder="Le message chiffré apparaîtra ici." outputFresh={encFlash.on}
+          />
+          <Station
+            kind="dec" title="Déchiffrer"
+            p={right} onEdit={dec.clear}
+            inputLabel="Message chiffré (reçu du chiffrement)"
+            inputValue={cipherIn}
+            onInput={(v) => { setCipherIn(v); dec.clear() }}
+            inputFresh={cipherFlash.on}
+            fileLabel="Chiffré depuis un fichier"
+            actionLabel="Déchiffrer ↓" onAction={decrypt}
+            demo={dec}
+            outputLabel="Message déchiffré" outputPlaceholder="Le message déchiffré apparaîtra ici." outputFresh={decFlash.on}
+          />
+        </div>
+      </div>
+
+      <History entries={history} onRemove={removeOp} onClear={clearHistory} />
+      <LimitsFlaws />
     </div>
   )
 }

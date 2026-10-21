@@ -66,12 +66,22 @@ export interface HillTrace {
 
 export type Trace = CaesarTrace | PlayfairTrace | HillTrace
 
+// Mise en forme renvoyée au chiffrement, à reporter au déchiffrement pour
+// retrouver les espaces : layout = [position, caractère] des non-lettres ;
+// fillers = positions des X ajoutés par Playfair/Hill.
+export type Layout = [number, string][]
+
 export interface CipherResponse {
   ok: boolean
   error?: string
   result?: string
   warning?: string | null
   trace?: Trace
+  layout?: Layout
+  fillers?: number[]
+  jmap?: number[]
+  cases?: number[]         // positions des lettres écrites en minuscules
+  time_us?: number | null  // temps de calcul de l'algorithme, en microsecondes
 }
 
 // ---- Échange de clés RSA (Partie 2) — voir backend/rsa_crypto.py ----
@@ -127,57 +137,66 @@ export interface OpenResponse {
 
 export type Strength = 'instant' | 'faible' | 'moyen' | 'fort' | 'inviolable'
 
-export interface Estimate {
-  alphabet: number
-  length: number
-  keyspace: number | null
-  keyspaceText: string
-  seconds: number | null
-  human: string
-  strength: Strength
-  rate: number
-  rateNotes?: string[]
+// Politique appliquée au mot de passe complexe (chaque règle active = condition
+// de validité). min_length = null quand la règle de longueur est désactivée.
+export interface Rules {
+  require_lower: boolean
+  require_upper: boolean
+  require_digit: boolean
+  require_symbol: boolean
+  min_length: number | null
 }
 
+export interface ValidateResult {
+  ok: boolean
+  valid: boolean
+  reasons: string[]       // ce qui manque (vide si valide)
+}
+
+// Force brute : le backend donne les faits (espace, rang exact de la cible,
+// estimation pire-cas) ; le front anime la progression. rank = numéro d'essai
+// auquel on tombe sur la cible (peut être un très grand entier -> string).
 export interface BruteResult {
   ok: boolean
-  found: boolean
-  stopped: boolean
-  password?: string | null
-  attempts: number
-  seconds: number
-  keyspace: number | null
-  keyspaceText: string
+  error?: string
+  valid: boolean
+  reasons: string[]
+  charset: string
   charsetSize: number
   length: number
   label: string
-  estimate: Estimate
+  keyspace: number | null
+  keyspaceText: string
+  rate: number
+  rateText: string
+  worstCaseSeconds: number | null
+  worstCaseHuman: string
+  strength: Strength
+  rank: number | string | null   // essais pour atteindre la cible
+  findSeconds: number | null      // temps pour atteindre la cible
+  findHuman: string | null
+  findStrength: Strength | null
+  reallyLooped: boolean           // true = boucle réelle (petit espace)
+  limit: number | null            // limite de tentatives active
+  cracked: boolean
 }
 
 export interface DictResult {
   ok: boolean
   found: boolean
+  stopped: boolean                // arrêté par la limite de tentatives
   password?: string
-  attempts: number
-  seconds: number
-  size: number
+  position: number | null         // rang du mot trouvé
+  scanned: number                 // mots réellement parcourus
+  size: number                    // taille totale du dictionnaire
+  limit: number | null
 }
 
-export interface ProtectResult {
-  ok: boolean
-  unprotected: Estimate
-  protected: Estimate
-  factorText: string | null
-  direction: 'longer' | 'shorter' | 'equal'
-}
-
-export interface HashResult {
-  ok: boolean
-  algo: string
-  salt: string
-  iterations: number
-  hash: string
-  secondsPerGuess: number
+export interface SpeedTable {
+  columns: { name: string; detail: string; size: number }[]
+  rows: { length: number; cells: { human: string; strength: Strength }[] }[]
+  rate: number
+  rateText: string
 }
 
 export interface CaseInfo {
@@ -197,10 +216,8 @@ export interface ClassSizes {
 
 export interface Assumptions {
   fastRate: number
-  slowHashRate: number
-  lockoutAttempts: number
-  lockoutWindow: number
-  maxAttempts: number
+  fastRateText: string
+  liveLoopMax: number
 }
 
 export interface CasesResponse {
@@ -209,17 +226,8 @@ export interface CasesResponse {
   fullCharset: string
   classSizes: ClassSizes
   dictionarySize: number
+  table: SpeedTable
   assumptions: Assumptions
-}
-
-export interface Protections {
-  require_lower: boolean
-  require_upper: boolean
-  require_digit: boolean
-  require_symbol: boolean
-  min_length: number | null
-  limit_attempts: boolean
-  slow_hash: boolean
 }
 
 export interface IntegrityDemo {
@@ -228,4 +236,44 @@ export interface IntegrityDemo {
   recomputed: string
   tampered: boolean
   valid: boolean
+}
+
+// ---- Fichiers de stockage (voir backend/storage.py) ----
+// Une ligne de l'historique des chiffrements : une opération réussie.
+export interface HistoryEntry {
+  id: number          // numéro attribué par le backend (négatif = ligne non enregistrée, gardée à l'écran seulement)
+  at?: string         // date d'enregistrement (ISO)
+  op: Operation
+  clear: string       // message clair
+  cipher: string      // message chiffré
+  algo: Algo
+  algoLabel: string
+  key: string         // la clé, en texte lisible
+  timeUs: number | null // temps de calcul de l'algorithme, en microsecondes
+}
+export type HistoryDraft = Omit<HistoryEntry, 'id' | 'at'>
+
+// Une ligne de l'historique des attaques (page Mots de passe) : une attaque terminée ou interrompue.
+export type PwResult = 'found' | 'blocked' | 'resist' | 'interrupted'
+export interface PwHistoryEntry {
+  id: number          // négatif = ligne non enregistrée (backend injoignable), gardée à l'écran seulement
+  at?: string
+  attack: 'brute' | 'dict'
+  case: 'binaire' | 'numerique' | 'complexe'
+  password: string
+  protection: string  // « Aucune », « 5 tentatives max »…
+  result: PwResult
+  tries: number       // essais effectués
+  timeSec: number     // durée de l'attaque à la vitesse de l'attaquant (secondes)
+}
+export type PwHistoryDraft = Omit<PwHistoryEntry, 'id' | 'at'>
+
+// Un message de la conversation A ↔ B, tel qu'il est rangé dans son fichier.
+export interface ChatRecord {
+  id: number
+  at?: string
+  from: 'a' | 'b'
+  plain: string
+  cipher: string
+  params: ExchangeParams
 }

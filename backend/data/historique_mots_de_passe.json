@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "next_id": 16,
+  "entries": [
+    {
+      "attack": "brute",
+      "case": "binaire",
+      "password": "101",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 6.0,
+      "timeSec": 6e-10,
+      "id": 1,
+      "at": "2026-10-21T13:12:45+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "numerique",
+      "password": "2413",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 115.0,
+      "timeSec": 1.15e-08,
+      "id": 2,
+      "at": "2026-10-21T13:12:56+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "numerique",
+      "password": "2413",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 115.0,
+      "timeSec": 1.15e-08,
+      "id": 3,
+      "at": "2026-10-21T13:13:07+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "numerique",
+      "password": "2413",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 115.0,
+      "timeSec": 1.15e-08,
+      "id": 4,
+      "at": "2026-10-21T13:13:08+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "numerique",
+      "password": "3121",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 133.0,
+      "timeSec": 1.33e-08,
+      "id": 5,
+      "at": "2026-10-21T13:13:11+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "numerique",
+      "password": "3121",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 548811.0,
+      "timeSec": 5.48811e-05,
+      "id": 6,
+      "at": "2026-10-21T13:13:27+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "numerique",
+      "password": "3121",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 548811.0,
+      "timeSec": 5.48811e-05,
+      "id": 7,
+      "at": "2026-10-21T13:13:34+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "coucoucoucou",
+      "protection": "Aucune",
+      "result": "interrupted",
+      "tries": 255435000000.00003,
+      "timeSec": 25.5435,
+      "id": 8,
+      "at": "2026-10-21T13:14:10+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "111111111111",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 111111111112.0,
+      "timeSec": 11.1111111112,
+      "id": 9,
+      "at": "2026-10-21T13:14:38+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "999999999999",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 1000000000000.0,
+      "timeSec": 100.0,
+      "id": 10,
+      "at": "2026-10-21T13:16:34+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "12zzBA",
+      "protection": "exige a-z A-Z 0-9",
+      "result": "found",
+      "tries": 49359018241.0,
+      "timeSec": 4.9359018241,
+      "id": 11,
+      "at": "2026-10-21T13:20:20+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "12-zzBA",
+      "protection": "500 000 000 000 tentatives max · exige a-z A-Z 0-9 symboles · long. min 6",
+      "result": "interrupted",
+      "tries": 334747000000.02985,
+      "timeSec": 33.47470000000298,
+      "id": 12,
+      "at": "2026-10-21T13:21:37+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "12-zBA",
+      "protection": "500 000 000 000 tentatives max · exige a-z A-Z 0-9 symboles · long. min 6",
+      "result": "found",
+      "tries": 252326146673.0,
+      "timeSec": 25.2326146673,
+      "id": 13,
+      "at": "2026-10-21T13:22:13+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "00000000000000000000000000000000",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 1.0,
+      "timeSec": 1e-10,
+      "id": 14,
+      "at": "2026-10-21T13:24:53+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "complexe",
+      "password": "2Wo,",
+      "protection": "Aucune",
+      "result": "resist",
+      "tries": 14344424.0,
+      "timeSec": 0.0014344424,
+      "id": 15,
+      "at": "2026-10-21T13:33:11+00:00"
+    }
+  ]
+}

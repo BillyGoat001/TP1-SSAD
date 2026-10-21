@@ -1,468 +1,616 @@
 import { useEffect, useRef, useState } from 'react'
-import type {
-  BruteResult, DictResult, HashResult, CasesResponse, ProtectResult,
-  Protections, Estimate, Strength,
-} from '../../types'
+import type { ReactNode } from 'react'
+import type { BruteResult, DictResult, CasesResponse, SpeedTable, Rules, Strength, PwHistoryEntry, PwHistoryDraft, PwResult } from '../../types'
 import { api } from '../../api'
+import PwHistory from './PwHistory'
+import { fmtDur, fmtTries } from './format'
+import { t, _t, num, locale, plural } from '../../i18n'
 
-// ---------------------------------------------------------------- helpers ----
+// ---------------------------------------------------------------- constantes ----
 const CASE_IDS = ['binaire', 'numerique', 'complexe'] as const
-const CASE_LABEL: Record<string, string> = {
-  binaire: 'Binaire', numerique: 'Numérique', complexe: 'Complexe',
-}
+type CaseId = (typeof CASE_IDS)[number]
+const CASE_LABEL: Record<CaseId, string> = { binaire: _t('Binaire'), numerique: _t('Numérique'), complexe: _t('Complexe') }
 const FALLBACK_FULL =
   'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{};:,.?/'
-const YEAR = 31_536_000
+const LOWER = 'abcdefghijklmnopqrstuvwxyz'
+const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const DIGITS = '0123456789'
+const SYMBOLS = '!@#$%^&*()-_=+[]{};:,.?/'
 
-// Compact French durations for the table, so every cell stays short.
-function compactTime(seconds: number): { label: string; strength: Strength } {
-  const s = seconds
-  if (!isFinite(s)) return { label: 'millénaires', strength: 'inviolable' }
-  if (s < 1e-3) return { label: 'instantané', strength: 'instant' }
-  if (s < 1) return { label: '< 1 s', strength: 'instant' }
-  if (s < 60) return { label: `${Math.round(s)} s`, strength: 'faible' }
-  if (s < 3600) return { label: `${Math.round(s / 60)} min`, strength: 'faible' }
-  if (s < 86400) return { label: `${Math.round(s / 3600)} h`, strength: 'moyen' }
-  if (s < 2_592_000) return { label: `${Math.round(s / 86400)} j`, strength: 'moyen' }
-  if (s < YEAR) return { label: `${Math.round(s / 2_592_000)} mois`, strength: 'moyen' }
-  if (s < 1000 * YEAR) { const n = Math.round(s / YEAR); return { label: n === 1 ? '1 an' : `${n.toLocaleString('fr-FR')} ans`, strength: 'fort' } }
-  if (s < 1e6 * YEAR) return { label: 'siècles', strength: 'fort' }
-  return { label: 'millénaires', strength: 'inviolable' }
+const SCRAMBLE_MS = 55
+const DEFAULT_RATE = 1e10           // essais/s de l'attaquant (le backend renvoie la valeur officielle)
+
+const EMPTY_RULES: Rules = {
+  require_lower: false, require_upper: false, require_digit: false, require_symbol: false, min_length: null,
 }
 
+// ---------------------------------------------------------------- helpers ----
 const strengthClass = (s: Strength) => `is-${s}`
+const WEAK: Strength[] = ['instant', 'faible', 'moyen']
 
 function randStr(charset: string, len: number): string {
   let out = ''
   for (let i = 0; i < len; i++) out += charset[Math.floor(Math.random() * charset.length)]
   return out
 }
-
-function fmtMs(seconds: number): string {
-  if (seconds < 1e-3) return `${(seconds * 1e6).toFixed(0)} µs`
-  if (seconds < 1) return `${(seconds * 1e3).toFixed(1)} ms`
-  return `${seconds.toFixed(2)} s`
+// nombre affiché (1 234 en français, 1,234 en anglais)
+const fr = (n: number) => num(Math.round(n))
+// nombre rangé dans l'historique : toujours en français (traduit à l'affichage par t())
+const frFR = (n: number) => Math.round(n).toLocaleString('fr-FR')
+const dec = (p: number, d: number) => p.toLocaleString(locale(), { minimumFractionDigits: d, maximumFractionDigits: d })
+function fmtPct(p: number): string {
+  if (p <= 0) return '0'
+  if (p >= 10) return Math.round(p).toString()
+  if (p >= 0.1) return dec(p, 1)
+  if (p >= 0.001) return dec(p, 3)
+  return '< ' + dec(0.001, 3)
 }
 
-function barPct(seconds: number | null): number {
-  if (seconds == null || !isFinite(seconds)) return 100
-  const l = Math.log10(Math.max(seconds, 1e-10))
-  return Math.max(3, Math.min(100, ((l + 10) / 130) * 100))
+// n'autorise à la frappe que les caractères du cas, et borne la longueur
+function sanitize(v: string, caseId: CaseId, full: string): string {
+  if (caseId === 'binaire') return v.replace(/[^01]/g, '').slice(0, 3)
+  if (caseId === 'numerique') return v.replace(/[^1-4]/g, '').slice(0, 4)
+  const allowed = new Set(full)
+  return [...v].filter((c) => allowed.has(c)).join('').slice(0, 64)
 }
 
-// sober inline icons (no emoji), same spirit as the eye toggle of the cipher tab
+// jeu de caractères réellement présent (cas complexe) — pour le scramble
+function detectedCharset(target: string): string {
+  let s = ''
+  if (/[a-z]/.test(target)) s += LOWER
+  if (/[A-Z]/.test(target)) s += UPPER
+  if (/[0-9]/.test(target)) s += DIGITS
+  if (/[^a-zA-Z0-9]/.test(target)) s += SYMBOLS
+  return s
+}
+
+// libellé de composition pour la pastille (ce que l'attaque doit parcourir)
+function composition(target: string, caseId: CaseId): string {
+  if (caseId === 'binaire') return t('0 et 1')
+  if (caseId === 'numerique') return t('chiffres 1 à 4')
+  const parts: string[] = []
+  if (/[a-z]/.test(target)) parts.push(t('minuscules'))
+  if (/[A-Z]/.test(target)) parts.push(t('majuscules'))
+  if (/[0-9]/.test(target)) parts.push(t('chiffres'))
+  if (/[^a-zA-Z0-9]/.test(target)) parts.push(t('symboles'))
+  if (parts.length === 0) return '—'
+  if (parts.length === 1) return t('{x} uniquement', { x: parts[0] })
+  return parts.join(', ')
+}
+
+// index de la colonne du tableau dont la taille d'alphabet est la plus proche
+function colForSize(size: number, sizes: number[]): number {
+  let best = sizes.length - 1
+  let bd = Infinity
+  sizes.forEach((s, i) => { const d = Math.abs(s - size); if (d < bd) { bd = d; best = i } })
+  return best
+}
+
+// génère un mot de passe conforme (cas + politique active)
+function generate(caseId: CaseId, len: number, full: string, rules: Rules | null): string {
+  if (caseId === 'binaire') return randStr('01', 3)
+  if (caseId === 'numerique') return randStr('1234', 4)
+  let L = Math.max(1, len)
+  const pools: string[] = []
+  if (rules?.require_lower) pools.push(LOWER)
+  if (rules?.require_upper) pools.push(UPPER)
+  if (rules?.require_digit) pools.push(DIGITS)
+  if (rules?.require_symbol) pools.push(SYMBOLS)
+  if (rules?.min_length) L = Math.max(L, rules.min_length)
+  L = Math.max(L, pools.length)
+  const chars = pools.map((p) => p[Math.floor(Math.random() * p.length)])
+  while (chars.length < L) chars.push(full[Math.floor(Math.random() * full.length)])
+  for (let i = chars.length - 1; i > 0; i--) {   // mélange de Fisher-Yates
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[chars[i], chars[j]] = [chars[j], chars[i]]
+  }
+  return chars.join('')
+}
+
+// validité (côté client, retour instantané ; le backend re-vérifie à l'attaque)
+function checkValid(target: string, caseId: CaseId, rules: Rules | null): { valid: boolean; reasons: string[] } {
+  const reasons: string[] = []
+  if (caseId === 'binaire' || caseId === 'numerique') {
+    const need = caseId === 'binaire' ? 3 : 4
+    if (target.length !== need) reasons.push(t('il faut exactement {n} caractères', { n: need }))
+    return { valid: reasons.length === 0, reasons }
+  }
+  if (target.length === 0) reasons.push(t('mot de passe vide'))
+  if (rules) {
+    if (rules.require_lower && !/[a-z]/.test(target)) reasons.push(t('il manque une minuscule'))
+    if (rules.require_upper && !/[A-Z]/.test(target)) reasons.push(t('il manque une majuscule'))
+    if (rules.require_digit && !/[0-9]/.test(target)) reasons.push(t('il manque un chiffre'))
+    if (rules.require_symbol && !/[^a-zA-Z0-9]/.test(target)) reasons.push(t('il manque un symbole'))
+    if (rules.min_length && target.length < rules.min_length)
+      reasons.push(t('longueur minimale : {min} (actuelle : {n})', { min: rules.min_length, n: target.length }))
+  }
+  return { valid: reasons.length === 0, reasons }
+}
+
+// icônes sobres
 const DiceIcon = () => (
   <svg className="icon-btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8.5" cy="8.5" r="1.1" fill="currentColor" stroke="none" />
     <circle cx="15.5" cy="15.5" r="1.1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
   </svg>
 )
-const CheckIcon = () => (
-  <svg className="pw-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 6 9 17l-5-5" />
-  </svg>
+const CheckIcon = ({ cls = 'pw-ind-ico' }: { cls?: string }) => (
+  <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
 )
+const CrossIcon = () => (
+  <svg className="pw-ind-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+)
+const StopIcon = () => (
+  <svg className="icon-btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+)
+
+// `sec` = durée de l'attaque, à la vitesse de l'attaquant (essais / vitesse)
+type Outcome =
+  | { kind: 'brute-found'; pw: string; tries: number; sec: number; strength: Strength }
+  | { kind: 'brute-blocked'; limit: number; sec: number }
+  | { kind: 'dict-found'; position: number; size: number; pw: string; sec: number }
+  | { kind: 'dict-blocked'; limit: number; sec: number }
+  | { kind: 'dict-resist'; size: number; sec: number }
+  | { kind: 'interrupted'; sec: number; tries: number; pct: number; fullHuman: string | null }
+
+type Meta = Omit<PwHistoryDraft, 'result' | 'tries' | 'timeSec'>
+const RESULT_OF: Record<Exclude<Outcome['kind'], 'interrupted'>, PwResult> = {
+  'brute-found': 'found', 'dict-found': 'found', 'brute-blocked': 'blocked', 'dict-blocked': 'blocked', 'dict-resist': 'resist',
+}
 
 // =============================================================================
 export default function PasswordsPanel() {
   const [data, setData] = useState<CasesResponse | null>(null)
-  const [caseId, setCaseId] = useState<string>('binaire')
+  const [caseId, setCaseId] = useState<CaseId>('binaire')
   const [target, setTarget] = useState('101')
-  const [length, setLength] = useState(8)
+  const [length, setLength] = useState(12)
 
-  const [brute, setBrute] = useState<BruteResult | null>(null)
-  const [dict, setDict] = useState<DictResult | null>(null)
+  // protection
+  const [protect, setProtect] = useState(false)
+  const [rules, setRules] = useState<Rules>(EMPTY_RULES)
+  const [limitOn, setLimitOn] = useState(false)      // « limiter les tentatives » (cas complexe)
+  const [limitStr, setLimitStr] = useState('5')      // champ libre (entier positif)
+  const [knowComposition, setKnowComposition] = useState(true)   // indice : l'attaquant connaît la composition
+
+  // attaque / verdict
   const [attacking, setAttacking] = useState<'brute' | 'dict' | null>(null)
+  const [progress, setProgress] = useState(0)
   const [counter, setCounter] = useState(0)
   const [scramble, setScramble] = useState('')
+  const [elapsed, setElapsed] = useState(0)           // durée écoulée de l'attaque (secondes)
+  const [history, setHistory] = useState<PwHistoryEntry[]>([])
+  const localId = useRef(0)                           // numéros négatifs : lignes que le backend n'a pas pu enregistrer
+  const [verdict, setVerdict] = useState<Outcome | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
-  const [protections, setProtections] = useState<Protections>({
-    require_lower: false, require_upper: false, require_digit: false,
-    require_symbol: false, min_length: null, limit_attempts: false, slow_hash: false,
-  })
-  const [protect, setProtect] = useState<ProtectResult | null>(null)
+  const anim = useRef<{
+    raf?: number; scramble?: number; start: number
+    total: number; end: number; outcome: Outcome | null; interrupted: boolean
+    runId: number; rate: number; fullHuman: string | null; meta: Meta | null
+  }>({ start: 0, total: 1, end: 0, outcome: null, interrupted: false, runId: 0, rate: DEFAULT_RATE, fullHuman: null, meta: null })
 
-  const [hash, setHash] = useState<HashResult | null>(null)
-  const [hashing, setHashing] = useState(false)
+  const full = data?.fullCharset ?? FALLBACK_FULL
+  const busy = !!attacking                            // pendant une attaque, rien ne se modifie : seul « Interrompre » l'arrête
+  const isSmall = caseId !== 'complexe'
+  const limitNum = Math.max(1, parseInt(limitStr, 10) || 1)
 
-  const anim = useRef<{ scramble?: number; raf?: number; to?: number }>({})
-  const fullCharset = data?.fullCharset ?? FALLBACK_FULL
-  const info = data?.cases[caseId]
-  const caseCharset = info?.charset ?? (caseId === 'binaire' ? '01' : caseId === 'numerique' ? '1234' : fullCharset)
+  const effRules: Rules | null = !isSmall && protect ? rules : null
+  const effLimit: number | null =
+    isSmall ? (protect ? limitNum : null) : (protect && limitOn ? limitNum : null)
+
+  const validity = checkValid(target, caseId, effRules)
 
   useEffect(() => {
     api.cases().then(setData).catch(() => setData(null))
+    reloadHistory()
     return () => cancelAnims()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Auto-detect the character classes present in the target → light up the
-  // matching chips, so the protections reflect what the password already has.
-  useEffect(() => {
-    if (caseId !== 'complexe') return
-    setProtections((p) => ({
-      ...p,
-      require_lower: /[a-z]/.test(target),
-      require_upper: /[A-Z]/.test(target),
-      require_digit: /[0-9]/.test(target),
-      require_symbol: /[^a-zA-Z0-9]/.test(target),
-    }))
-  }, [caseId, target])
-
-  // Recompute the sans/avec comparison on any change (cheap, lightly debounced).
-  useEffect(() => {
-    if (caseId !== 'complexe') { setProtect(null); return }
-    const t = window.setTimeout(() => {
-      api.protect(target, protections).then(setProtect).catch(() => {})
-    }, 120)
-    return () => window.clearTimeout(t)
-  }, [caseId, target, protections])
-
   function cancelAnims() {
-    if (anim.current.scramble) window.clearInterval(anim.current.scramble)
     if (anim.current.raf) cancelAnimationFrame(anim.current.raf)
-    if (anim.current.to) window.clearTimeout(anim.current.to)
-  }
-
-  function genTarget(id: string, len: number): string {
-    if (id === 'binaire') return randStr('01', 3)
-    if (id === 'numerique') return randStr('1234', 4)
-    return randStr(fullCharset, Math.max(0, len))
-  }
-
-  function changeCase(id: string) {
-    cancelAnims(); setAttacking(null); setCaseId(id)
-    setBrute(null); setDict(null); setErr(null); setHash(null)
-    setTarget(id === 'binaire' ? '101' : id === 'numerique' ? '2413' : genTarget('complexe', length))
-  }
-  function onSlide(v: number) { setLength(v); setTarget(genTarget('complexe', v)); setBrute(null); setDict(null) }
-  function onType(v: string) { setTarget(v); if (caseId === 'complexe') setLength(v.length); setBrute(null); setDict(null) }
-  function regenerate() { setTarget(genTarget(caseId, length)); setBrute(null); setDict(null) }
-
-  const delay = (ms: number) => new Promise<void>((r) => { anim.current.to = window.setTimeout(r, ms) })
-  const tween = (to: number, ms: number) =>
-    new Promise<void>((resolve) => {
-      const start = performance.now()
-      const step = (now: number) => {
-        const t = Math.min(1, (now - start) / ms)
-        setCounter(Math.round(to * (1 - Math.pow(1 - t, 3))))
-        if (t < 1) anim.current.raf = requestAnimationFrame(step)
-        else resolve()
-      }
-      anim.current.raf = requestAnimationFrame(step)
-    })
-
-  async function settle(t0: number) {
-    const elapsed = performance.now() - t0
-    await delay(Math.max(0, 850 - elapsed))
     if (anim.current.scramble) window.clearInterval(anim.current.scramble)
+    anim.current.raf = undefined
+    anim.current.scramble = undefined
+  }
+  function resetAttack() {
+    cancelAnims(); anim.current.runId++
+    setAttacking(null); setProgress(0); setCounter(0); setElapsed(0); setVerdict(null); setErr(null)
   }
 
-  async function runAttack(kind: 'brute' | 'dict') {
-    cancelAnims(); setErr(null); setAttacking(kind); setCounter(0)
-    if (kind === 'brute') setBrute(null); else setDict(null)
-    const sCharset = kind === 'brute' ? caseCharset : 'abcdefghijklmnopqrstuvwxyz'
-    const sLen = kind === 'brute' ? (caseId === 'complexe' ? Math.max(1, length) : caseCharset === '01' ? 3 : 4) : 8
-    anim.current.scramble = window.setInterval(() => setScramble(randStr(sCharset, sLen)), 55)
-    const t0 = performance.now()
+  // ---- historique (fichier côté backend ; si le backend ne répond pas, la ligne reste à l'écran) ----
+  function reloadHistory() {
+    api.pwHistoryList().then((r) => { if (r.ok) setHistory(r.entries) }).catch(() => { /* garde l'écran */ })
+  }
+  async function record(draft: PwHistoryDraft) {
+    let entry: PwHistoryEntry
     try {
-      if (kind === 'brute') {
-        const res = await api.bruteforce(caseId, target, caseId === 'complexe' ? length : undefined)
-        await settle(t0); setCounter(res.attempts); await tween(res.attempts, 650); setBrute(res)
-      } else {
-        const res = await api.dictionary(target)
-        await settle(t0); setCounter(res.attempts); await tween(res.attempts, 650); setDict(res)
-      }
+      const r = await api.pwHistoryAdd(draft)
+      entry = r.ok ? r.entry : { ...draft, id: -(++localId.current) }
     } catch {
-      setErr('Backend injoignable. Lance le serveur Python.')
-    } finally {
-      if (anim.current.scramble) window.clearInterval(anim.current.scramble)
-      setAttacking(null)
+      entry = { ...draft, id: -(++localId.current) }
+    }
+    setHistory((h) => [entry, ...h])
+  }
+  function removeRun(id: number) {
+    setHistory((h) => h.filter((e) => e.id !== id))
+    if (id > 0) api.pwHistoryRemove(id).then((r) => { if (!r.ok) reloadHistory() }).catch(reloadHistory)
+  }
+  function clearHistory() {
+    setHistory([])
+    api.pwHistoryClear().then((r) => { if (!r.ok) reloadHistory() }).catch(reloadHistory)
+  }
+
+  // résumé des protections actives, pour l'historique (en français, traduit à l'affichage)
+  function protectionText(kind: 'brute' | 'dict'): string {
+    const parts: string[] = []
+    if (effLimit != null) parts.push(`${frFR(effLimit)} tentative${effLimit > 1 ? 's' : ''} max`)
+    if (effRules) {
+      const cl = ([['require_lower', 'a-z'], ['require_upper', 'A-Z'], ['require_digit', '0-9'], ['require_symbol', 'symboles']] as const)
+        .filter(([k]) => effRules[k]).map(([, l]) => l)
+      parts.push(...cl)
+      if (effRules.min_length) parts.push(`long. min ${effRules.min_length}`)
+    }
+    if (kind === 'brute' && !isSmall && !knowComposition) parts.push('sans indice')
+    return parts.length ? parts.join(' · ') : 'Aucune'
+  }
+
+  function changeCase(id: CaseId) {
+    resetAttack()
+    setCaseId(id)
+    setProtect(false); setRules(EMPTY_RULES); setLimitOn(false)
+    setTarget(id === 'binaire' ? '101' : id === 'numerique' ? '2413' : generate('complexe', length, full, null))
+  }
+  function onType(v: string) { resetAttack(); const s = sanitize(v, caseId, full); setTarget(s); if (!isSmall) setLength(s.length) }
+  function onSlide(v: number) { resetAttack(); setLength(v); setTarget(generate('complexe', v, full, effRules)) }
+  function regenerate() { resetAttack(); setTarget(generate(caseId, length, full, effRules)) }
+
+  const minSlide = protect && rules.min_length ? rules.min_length : 1
+  function setMinLen(v: number) {
+    const nv = Math.max(1, Math.min(64, v))
+    setRules((r) => ({ ...r, min_length: nv }))
+    if (length < nv) { setLength(nv); setTarget(generate('complexe', nv, full, { ...rules, min_length: nv })) }
+  }
+  const toggleRule = (k: keyof Rules) => { resetAttack(); setRules((r) => ({ ...r, [k]: !r[k] })) }
+
+  // ------------------------------------------------------------- attaque ----
+  const scrambleSample = (kind: 'brute' | 'dict') => {
+    if (kind === 'dict') return randStr(LOWER, 4 + Math.floor(Math.random() * 5))
+    const cs = isSmall ? (caseId === 'binaire' ? '01' : '1234') : (detectedCharset(target) || full)
+    const len = isSmall ? (caseId === 'binaire' ? 3 : 4) : Math.max(1, length)
+    return randStr(cs, len)
+  }
+
+  // L'attaque tourne en TEMPS RÉEL à la vitesse de l'attaquant : au bout de t secondes,
+  // elle a fait vitesse × t essais. Aucune durée n'est imposée : un mot de passe faible
+  // tombe tout de suite, un mot de passe fort peut demander des heures ou des jours.
+  // Elle ne s'arrête que quand la cible est trouvée, que la limite de tentatives est
+  // atteinte (protection) ou que l'utilisateur clique sur « Interrompre ».
+  function frame(now: number) {
+    const a = anim.current
+    if (a.interrupted) return
+    const sec = Math.max(0, (now - a.start) / 1000)
+    const tries = Math.min(a.end, a.rate * sec)
+    setCounter(tries)
+    setProgress((tries / a.total) * 100)
+    setElapsed(Math.min(sec, a.end / a.rate))
+    if (tries < a.end) a.raf = requestAnimationFrame(frame)
+    else finishAttack()
+  }
+
+  function finishAttack() {
+    const a = anim.current
+    if (a.scramble) window.clearInterval(a.scramble)
+    a.scramble = undefined
+    const sec = a.end / a.rate
+    setProgress(Math.min(100, (a.end / a.total) * 100))   // barre figée au point d'arrêt
+    setCounter(a.end)
+    setElapsed(sec)
+    setVerdict(a.outcome)
+    setAttacking(null)
+    if (a.outcome && a.meta && a.outcome.kind !== 'interrupted') {
+      record({ ...a.meta, result: RESULT_OF[a.outcome.kind], tries: a.end, timeSec: sec })
     }
   }
 
-  async function runHash() {
-    setHashing(true)
-    try { setHash(await api.hashPassword(target)) } finally { setHashing(false) }
+  function interrupt() {
+    const a = anim.current
+    a.interrupted = true
+    a.runId++                                  // une réponse du backend encore attendue sera ignorée
+    cancelAnims()
+    let sec = 0, tries = 0
+    if (a.outcome) {                           // l'attaque avait démarré : on fige où elle en est
+      sec = Math.min(Math.max(0, (performance.now() - a.start) / 1000), a.end / a.rate)
+      tries = Math.min(a.end, a.rate * sec)
+    }
+    const pct = a.total > 0 ? (tries / a.total) * 100 : 0
+    setCounter(tries); setProgress(pct); setElapsed(sec)
+    setVerdict({ kind: 'interrupted', sec, tries, pct, fullHuman: a.fullHuman })
+    setAttacking(null)
+    if (a.outcome && a.meta) record({ ...a.meta, result: 'interrupted', tries, timeSec: sec })
   }
 
-  const toggle = (k: keyof Protections) => setProtections((p) => ({ ...p, [k]: !p[k] }))
-  const toggleMinLen = () => setProtections((p) => ({ ...p, min_length: p.min_length == null ? 12 : null }))
-  const setMinLen = (v: number) => setProtections((p) => ({ ...p, min_length: Math.max(8, Math.min(32, v)) }))
+  async function runAttack(kind: 'brute' | 'dict') {
+    cancelAnims()
+    setErr(null); setVerdict(null); setAttacking(kind); setProgress(0); setCounter(0); setElapsed(0)
+    const a = anim.current
+    const id = ++a.runId
+    a.interrupted = false
+    a.outcome = null
+    a.fullHuman = null
+    a.rate = data?.assumptions?.fastRate ?? DEFAULT_RATE
+    a.meta = { attack: kind, case: caseId, password: target, protection: protectionText(kind) }
+    a.scramble = window.setInterval(() => setScramble(scrambleSample(kind)), SCRAMBLE_MS)
+    try {
+      if (kind === 'brute') {
+        const res: BruteResult = await api.bruteforce(caseId, target, isSmall ? undefined : length, effLimit, effRules, knowComposition)
+        if (a.runId !== id) return             // interrompu / réinitialisé pendant l'attente
+        if (!res.ok || !res.valid) { resetAttack(); setErr(_t('Mot de passe non conforme à la politique.')); return }
+        const space = Number(res.keyspace ?? 1) || 1
+        const rankNum = res.rank == null ? space : Number(res.rank)
+        a.rate = res.rate || a.rate
+        // la barre représente la fraction des COMBINAISONS possibles parcourues
+        // (si l'attaque est bloquée à N essais, on voit quel % de l'espace ça couvre)
+        a.total = space
+        a.end = res.cracked ? rankNum : (res.limit ?? space)
+        a.fullHuman = res.cracked ? res.findHuman : null
+        a.outcome = res.cracked
+          ? { kind: 'brute-found', pw: target, tries: rankNum, sec: rankNum / a.rate, strength: res.findStrength ?? 'inviolable' }
+          : { kind: 'brute-blocked', limit: res.limit ?? 0, sec: a.end / a.rate }
+      } else {
+        const res: DictResult = await api.dictionary(target, effLimit)
+        if (a.runId !== id) return
+        if (!res.ok) { resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.')); return }
+        a.total = res.size
+        a.end = res.found ? (res.position ?? 0) : res.scanned
+        const sec = a.end / a.rate
+        a.outcome = res.found
+          ? { kind: 'dict-found', position: res.position ?? 0, size: res.size, pw: target, sec }
+          : res.stopped ? { kind: 'dict-blocked', limit: res.limit ?? 0, sec } : { kind: 'dict-resist', size: res.size, sec }
+      }
+    } catch {
+      if (a.runId !== id) return
+      resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.')); return
+    }
+    a.start = performance.now()
+    a.raf = requestAnimationFrame(frame)
+  }
 
-  const classChips: { k: keyof Protections; label: string }[] = [
-    { k: 'require_lower', label: 'a-z' }, { k: 'require_upper', label: 'A-Z' },
-    { k: 'require_digit', label: '0-9' }, { k: 'require_symbol', label: 'Symboles' },
-  ]
-  const keyText = caseId === 'complexe' ? `${caseCharset.length}^${length}` : (info?.keyspaceText ?? '')
+  const classChips = [['require_lower', 'a-z'], ['require_upper', 'A-Z'], ['require_digit', '0-9'], ['require_symbol', _t('Symboles')]] as const
 
+  // mot de passe trouvé : on le garde affiché au-dessus de la barre
+  const foundPw = verdict && ((verdict.kind === 'brute-found' && WEAK.includes(verdict.strength)) || verdict.kind === 'dict-found')
+    ? verdict.pw : null
+  // colonne à entourer dans le tableau : celle du jeu détecté si l'indice est
+  // actif, sinon la dernière (pire cas, jeu complet)
+  const tableCols = data?.table?.columns ?? []
+  const highlightCol = tableCols.length
+    ? (knowComposition ? colForSize(detectedCharset(target).length || 86, tableCols.map((c) => c.size)) : tableCols.length - 1)
+    : 0
+
+  // =============================================================================
   return (
+    <>
     <div className="panel">
-      <h2 className="panel-title">Mots de passe — attaques &amp; protection</h2>
-      <p className="panel-sub">
-        Un seul principe : <strong>temps = espace de clés ÷ vitesse de l'attaquant</strong>.
-        On attaque les trois cas de l'énoncé, puis on active des protections et on
-        regarde le temps grimper. Attaquant de référence : ~10 milliards d'essais/s.
-      </p>
+      <h2 className="panel-title">{t('Mots de passe — attaques & protection')}</h2>
 
+      {/* --- choix du cas --- */}
       <div className="field">
-        <span className="field-label">Cas</span>
-        <div className="segmented">
+        <span className="field-label">{t('Cas')}</span>
+        <div className="segmented" role="group" aria-label={t('Type de mot de passe')}>
           {CASE_IDS.map((id) => (
-            <button key={id} className={'seg' + (caseId === id ? ' is-on' : '')} onClick={() => changeCase(id)}>
-              {CASE_LABEL[id]}
+            <button key={id} className={'seg' + (caseId === id ? ' is-on' : '')}
+              aria-pressed={caseId === id} disabled={busy} onClick={() => changeCase(id)}>
+              {t(CASE_LABEL[id])}
             </button>
           ))}
         </div>
       </div>
 
-      {info && (
-        <p className="pw-caption">
-          {info.label} · <span className="mono">{keyText}</span> combinaisons
-        </p>
-      )}
-
-      <div className="controls">
-        <div className="field grow">
-          <span className="field-label">Mot de passe cible</span>
-          <input className="text-input mono" value={target} onChange={(e) => onType(e.target.value)} />
+      {/* --- cible : champ (compteur à droite), puis Générer, puis le slider --- */}
+      <div className="pw-target">
+        <div className="pw-input-wrap">
+          <input className={'text-input mono pw-input' + (isSmall ? '' : ' has-count')}
+            value={target} onChange={(e) => onType(e.target.value)}
+            aria-label={t('Mot de passe cible')} disabled={busy} spellCheck={false} autoComplete="off" />
+          {!isSmall && <span className="pw-count" aria-hidden="true">{target.length}/64</span>}
         </div>
-        <button className="btn" onClick={regenerate}><DiceIcon />Générer</button>
+        <button className="btn pw-gen" onClick={regenerate} disabled={busy}><DiceIcon />{t('Générer')}</button>
+        {!isSmall && (
+          <label className="pw-slide-inline">
+            <span className="pw-slide-cap">{t('long. {n}', { n: length })}</span>
+            <input className="pw-slider" type="range" min={minSlide} max={64} value={length}
+              aria-label={t('Longueur du mot de passe généré : {n}', { n: length })} disabled={busy}
+              onChange={(e) => onSlide(parseInt(e.target.value, 10))} />
+          </label>
+        )}
       </div>
 
-      {caseId === 'complexe' && (
-        <div className="field">
-          <span className="field-label">Longueur : {length}</span>
-          <input className="pw-slider" type="range" min={0} max={64} value={length}
-            onChange={(e) => onSlide(parseInt(e.target.value, 10))} />
-        </div>
-      )}
-
-      <div className="btn-row cipher-actions">
-        <button className="btn btn-accent" onClick={() => runAttack('brute')} disabled={!!attacking}>Force brute</button>
-        <button className="btn btn-accent" onClick={() => runAttack('dict')} disabled={!!attacking}>Dictionnaire</button>
+      {/* --- indicateur de validité --- */}
+      <div className={'pw-validity ' + (validity.valid ? 'is-ok' : 'is-bad')} role="status">
+        {validity.valid ? (<><CheckIcon /> {t('Mot de passe valide')}</>) : (<><CrossIcon /> {t('Invalide :')} {validity.reasons.join(' · ')}</>)}
       </div>
 
-      {err && <div className="warn error">⚠ {err}</div>}
-
-      {attacking && (
-        <div className="pw-stage">
-          <div className="pw-stage-label">Cassage en cours…</div>
-          <div className="pw-counter">{counter.toLocaleString('fr-FR')}</div>
-          <div className="pw-counter-sub">essais</div>
-          <div className="pw-scramble">{scramble}</div>
+      {/* --- actions : indice (gauche) · attaques (centre) · protection (droite) --- */}
+      <div className="pw-actions">
+        <div className="pw-actions-side pw-actions-left">
+          {!isSmall && (
+            <button className={'pw-pill' + (knowComposition ? ' is-on' : '')} aria-pressed={knowComposition} disabled={busy}
+              title={t("L'attaquant connaît-il la composition du mot de passe ? S'il la connaît, il restreint son jeu de caractères (sinon il suppose le pire cas).")}
+              onClick={() => { resetAttack(); setKnowComposition((v) => !v) }}>
+              <span className="pw-switch-dot" />
+              {knowComposition ? <>{t('indice :')} {composition(target, caseId)}</> : <>{t('indice désactivé')}</>}
+            </button>
+          )}
         </div>
-      )}
+        <div className="pw-actions-mid">
+          <button className="btn btn-accent" onClick={() => runAttack('brute')} disabled={!!attacking || !validity.valid}>{t('Force brute')}</button>
+          <button className="btn btn-accent" onClick={() => runAttack('dict')} disabled={!!attacking || !validity.valid}>{t('Dictionnaire')}</button>
+        </div>
+        <div className="pw-actions-side pw-actions-right">
+          <button className={'pw-protect-btn' + (protect ? ' is-on' : '')} aria-pressed={protect} disabled={busy}
+            onClick={() => { resetAttack(); setProtect((v) => !v) }}>
+            <span className="pw-switch-dot" />{protect ? t('Protection activée') : t('Activer la protection')}
+          </button>
+        </div>
+      </div>
 
-      {!attacking && brute && <BruteCard res={brute} />}
-      {!attacking && dict && <DictCard res={dict} />}
-
-      <div className="divider" />
-
-      {caseId === 'complexe' ? (
-        <>
-          <h3 className="sub-title">Protections (politique sur le mot de passe complexe)</h3>
-          <p className="panel-sub">
-            Les classes allumées sont celles <strong>détectées dans ton mot de passe</strong> ;
-            ajoute-en pour agrandir l'espace, retires-en pour voir l'attaque devenir
-            plus rapide. Limiter les tentatives et le hachage lent <strong>ralentissent
-            l'attaquant</strong>. Le temps « avec protection » se compare en direct au
-            temps « sans protection ».
-          </p>
-
-          <div className="pw-protect-groups">
-            <div className="pw-group">
-              <span className="pw-group-label">Jeu de caractères (détecté, modifiable)</span>
-              <div className="pw-chips">
-                {classChips.map((c) => (
-                  <button key={c.k} className={'pw-chip' + (protections[c.k] ? ' is-on' : '')} onClick={() => toggle(c.k)}>
-                    {c.label}
-                  </button>
-                ))}
-              </div>
+      {/* --- protection inline (sans section ni explications) --- */}
+      {protect && (
+        <div className="pw-protect-inline">
+          {!isSmall && (
+            <div className="pw-chips">
+              {classChips.map(([k, lbl]) => (
+                <button key={k} className={'pw-chip' + (rules[k] ? ' is-on' : '')} aria-pressed={!!rules[k]} disabled={busy} onClick={() => toggleRule(k)}>{t(lbl)}</button>
+              ))}
             </div>
-
-            <div className="pw-group">
-              <span className="pw-group-label">Longueur minimale</span>
-              <div className="pw-chips">
-                <button className={'pw-chip' + (protections.min_length != null ? ' is-on' : '')} onClick={toggleMinLen}>
-                  {protections.min_length != null ? `≥ ${protections.min_length}` : 'Activer'}
+          )}
+          <div className="pw-protect-row">
+            {!isSmall && (
+              <span className="pw-toggle-item">
+                <button className={'pw-chip' + (rules.min_length != null ? ' is-on' : '')} aria-pressed={rules.min_length != null} disabled={busy}
+                  onClick={() => { resetAttack(); setRules((r) => ({ ...r, min_length: r.min_length == null ? 12 : null })) }}>
+                  {t('Longueur minimale')}
                 </button>
-                {protections.min_length != null && (
-                  <span className="pw-stepper">
-                    <button className="pw-step" onClick={() => setMinLen((protections.min_length ?? 12) - 1)}>−</button>
-                    <span className="pw-step-val">{protections.min_length}</span>
-                    <button className="pw-step" onClick={() => setMinLen((protections.min_length ?? 12) + 1)}>+</button>
-                  </span>
+                {rules.min_length != null && (
+                  <input className="pw-num" type="number" min={1} max={64} value={rules.min_length}
+                    aria-label={t('Longueur minimale')} disabled={busy}
+                    onChange={(e) => setMinLen(parseInt(e.target.value, 10) || 1)} />
                 )}
-              </div>
-            </div>
-
-            <div className="pw-group">
-              <span className="pw-group-label">Ralentir l'attaquant</span>
-              <div className="pw-chips">
-                <button className={'pw-chip' + (protections.limit_attempts ? ' is-on' : '')} onClick={() => toggle('limit_attempts')}>
-                  Limiter les tentatives
-                </button>
-                <button className={'pw-chip' + (protections.slow_hash ? ' is-on' : '')} onClick={() => toggle('slow_hash')}>
-                  Hachage lent
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {protect && <Compare r={protect} />}
-
-          <div className="pw-hash-block">
-            <div className="controls">
-              <div className="field grow">
-                <span className="field-label">Hachage concret du mot de passe (PBKDF2)</span>
-                <p className="pw-hint">
-                  « Hachage lent » ci-dessus, en vrai : on ne stocke jamais le mot de
-                  passe, seulement cette empreinte salée. Chaque essai de l'attaquant
-                  coûte alors le temps ci-dessous.
-                </p>
-              </div>
-              <button className="btn" onClick={runHash} disabled={hashing}>{hashing ? '…' : 'Hacher'}</button>
-            </div>
-            {hash && (
-              <div className="hash-card">
-                <Row label="Algorithme" value={hash.algo} />
-                <Row label="Sel (aléatoire)" value={hash.salt} mono />
-                <Row label="Itérations" value={hash.iterations.toLocaleString('fr-FR')} />
-                <Row label="Empreinte" value={hash.hash} mono />
-                <Row label="Coût / essai" value={`${(hash.secondsPerGuess * 1000).toFixed(1)} ms`} />
-              </div>
+              </span>
             )}
+            <span className="pw-toggle-item">
+              {isSmall ? (
+                <span className="pw-toggle-lbl">{t('Nombre de tentatives autorisées')}</span>
+              ) : (
+                <button className={'pw-chip' + (limitOn ? ' is-on' : '')} aria-pressed={limitOn} disabled={busy}
+                  onClick={() => { resetAttack(); setLimitOn((v) => !v) }}>
+                  {t('Limiter les tentatives')}
+                </button>
+              )}
+              {(isSmall || limitOn) && (
+                <input className="pw-num pw-num-grow" type="text" inputMode="numeric" value={limitStr}
+                  aria-label={t('Nombre de tentatives autorisées')} disabled={busy}
+                  style={{ width: `calc(${Math.max(4, limitStr.length + 1)}ch + 20px)`, maxWidth: '100%' }}
+                  onChange={(e) => { resetAttack(); setLimitStr(e.target.value.replace(/[^0-9]/g, '')) }} />
+              )}
+            </span>
           </div>
+        </div>
+      )}
 
-          <div className="divider" />
-          <h3 className="sub-title">Combien de temps, selon la taille et le type</h3>
-          <TimeTable fullSize={fullCharset.length} currentLen={length} />
-        </>
-      ) : (
+      {err && <div className="warn error">⚠ {t(err)}</div>}
+
+      {/* --- progression (reste visible à l'arrêt) --- */}
+      {(attacking || verdict) && (
+        <div className="pw-stage">
+          {attacking && (
+            <div className="pw-stage-top">
+              <span className="pw-stage-label">{attacking === 'brute' ? t('Force brute en cours…') : t('Dictionnaire en cours…')}</span>
+              <button className="btn tiny pw-stop" onClick={interrupt}><StopIcon />{t('Interrompre')}</button>
+            </div>
+          )}
+          {(attacking || foundPw) && (
+            <div className={'pw-scramble' + (!attacking && foundPw ? ' pw-found' : '')}>
+              {attacking ? scramble : foundPw}
+            </div>
+          )}
+          <div className="pw-progress"><span style={{ width: Math.max(0, Math.min(100, progress)) + '%' }} /></div>
+          <div className="pw-progress-meta">
+            <span className="pw-pct">{t('{p} % des combinaisons', { p: fmtPct(progress) })}</span>
+            <span className="pw-tried">{fmtTries(counter)} {t(plural(counter, 'essai', 'essais'))}</span>
+          </div>
+          <div className="pw-clock">
+            {attacking ? t('Temps écoulé :') : t('Durée de l\'attaque :')} <strong>{fmtDur(elapsed)}</strong>
+          </div>
+        </div>
+      )}
+
+      {verdict && <Verdict o={verdict} />}
+
+
+      {/* --- tableau des durées (complexe) --- */}
+      {!isSmall && data?.table && (
         <>
-          <h3 className="sub-title">Protection d'un si petit espace</h3>
-          <p className="panel-sub">
-            Avec seulement <strong>{info?.keyspaceText}</strong> combinaisons, aucun
-            hachage ne sauve : l'attaquant les épuise quand même. La seule défense qui
-            tient, c'est <strong>limiter les tentatives</strong> (verrouillage après
-            quelques essais). Les protections par politique (classes, longueur) n'ont
-            de sens que sur le mot de passe <em>complexe</em>.
-          </p>
+          <div className="divider" />
+          <h3 className="sub-title">{t('Combien de temps, selon la taille et le type')}</h3>
+          <TimeTable table={data.table} currentLen={length} highlightCol={highlightCol} />
         </>
       )}
     </div>
+
+    {/* historique : une carte à part, hors du cadre « Mots de passe » */}
+    <PwHistory entries={history} onRemove={removeRun} onClear={clearHistory} />
+    </>
   )
 }
 
-// ---------------------------------------------------------- sub-components ----
-function BruteCard({ res }: { res: BruteResult }) {
-  const e = res.estimate
+// ---------------------------------------------------------- sous-composants ----
+function Verdict({ o }: { o: Outcome }) {
+  let cls: Strength = 'fort'
+  let label = ''
+  let detail: ReactNode = null
+  const essais = (n: number) => `${fmtTries(n)} ${t(plural(n, 'essai', 'essais'))}`
+  switch (o.kind) {
+    case 'brute-found':
+      cls = o.strength; label = t('Mot de passe cracké')
+      detail = <><CheckIcon /> <strong className="mono">{o.pw}</strong> — {t('cracké en')} <strong>{fmtDur(o.sec)}</strong> ({essais(o.tries)})</>
+      break
+    case 'dict-found':
+      cls = 'instant'; label = t('Trouvé dans le dictionnaire')
+      detail = <><CheckIcon /> <strong className="mono">{o.pw}</strong> — {t('mot n° {i} sur {n}, cracké en', { i: fr(o.position), n: fr(o.size) })} <strong>{fmtDur(o.sec)}</strong></>
+      break
+    case 'brute-blocked':
+    case 'dict-blocked':
+      cls = 'fort'; label = t('Attaque bloquée')
+      detail = <>{t('arrêtée après {n} {w} ({d}) — mot de passe non trouvé', { n: fr(o.limit), w: t(plural(o.limit, 'tentative', 'tentatives')), d: fmtDur(o.sec) })}</>
+      break
+    case 'dict-resist':
+      cls = 'fort'; label = t('Résiste au dictionnaire')
+      detail = <>{t('absent des {n} mots testés (parcourus en {d}) — le dictionnaire ne suffit pas', { n: fr(o.size), d: fmtDur(o.sec) })}</>
+      break
+    case 'interrupted':
+      cls = 'moyen'; label = t('Attaque interrompue')
+      detail = (
+        <>
+          {t("tu as arrêté l'attaque après")} <strong>{fmtDur(o.sec)}</strong> ({essais(o.tries)}, {t('{p} % des combinaisons', { p: fmtPct(o.pct) })})
+          {o.fullHuman && <> — {t('il aurait fallu ~{d} pour trouver ce mot de passe', { d: t(o.fullHuman) })}</>}
+        </>
+      )
+      break
+  }
   return (
-    <div className={'pw-verdict ' + strengthClass(e.strength)} key={'b' + e.human + res.attempts}>
-      <div className="pw-verdict-label">Force brute — temps estimé (attaquant rapide)</div>
-      <div className="pw-time">{e.human}</div>
-      <div className="pw-verdict-meta">{res.keyspaceText} combinaisons · alphabet {e.alphabet}, longueur {e.length}</div>
-      <div className="pw-run">
-        {res.found ? (
-          <><CheckIcon /> mot de passe trouvé : <strong className="mono">{res.password}</strong> — {res.attempts.toLocaleString('fr-FR')} essais, {fmtMs(res.seconds)}</>
-        ) : res.stopped ? (
-          <>on a testé {res.attempts.toLocaleString('fr-FR')} combinaisons en direct sans l'atteindre (plafond de la démo) — d'où l'estimation ci-dessus</>
-        ) : (
-          <>non trouvé ({res.attempts.toLocaleString('fr-FR')} essais)</>
-        )}
-      </div>
+    <div className={'pw-verdict ' + strengthClass(cls)}>
+      <div className="pw-verdict-label">{label}</div>
+      <div className="pw-run">{detail}</div>
     </div>
   )
 }
 
-function DictCard({ res }: { res: DictResult }) {
-  return (
-    <div className={'pw-verdict ' + (res.found ? 'is-instant' : 'is-fort')} key={'d' + res.attempts}>
-      <div className="pw-verdict-label">Dictionnaire (anglais + français, {res.size.toLocaleString('fr-FR')} mots réels)</div>
-      <div className="pw-time">{res.found ? 'instantané' : 'résiste au dictionnaire'}</div>
-      <div className="pw-run">
-        {res.found ? (
-          <><CheckIcon /> mot de passe trouvé : <strong className="mono">{res.password}</strong> — mot n°{res.attempts.toLocaleString('fr-FR')} ({fmtMs(res.seconds)})</>
-        ) : (
-          <>absent des {res.size.toLocaleString('fr-FR')} mots courants testés ({fmtMs(res.seconds)})</>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function Compare({ r }: { r: ProtectResult }) {
-  return (
-    <div className="pw-compare">
-      <CompareCard title="Sans protection" e={r.unprotected} />
-      <div className="pw-compare-mid">
-        <div className="pw-arrow">→</div>
-        {r.factorText && <div className={'pw-factor ' + r.direction}>{r.factorText}</div>}
-      </div>
-      <CompareCard title="Avec protection" e={r.protected} highlight />
-    </div>
-  )
-}
-
-function CompareCard({ title, e, highlight }: { title: string; e: Estimate; highlight?: boolean }) {
-  return (
-    <div className={'pw-cc ' + strengthClass(e.strength) + (highlight ? ' is-highlight' : '')}>
-      <div className="pw-cc-title">{title}</div>
-      <div className="pw-time small" key={e.human}>{e.human}</div>
-      <div className="pw-bar"><span style={{ width: barPct(e.seconds) + '%' }} /></div>
-      <div className="pw-cc-meta">
-        alphabet {e.alphabet} · longueur {e.length}
-        {e.rateNotes && e.rateNotes.length > 0 && <> · {e.rateNotes.join(', ')}</>}
-      </div>
-    </div>
-  )
-}
-
-function TimeTable({ fullSize, currentLen }: { fullSize: number; currentLen: number }) {
-  const rows = [4, 6, 8, 10, 12, 16]
-  const cols = [
-    { name: 'Chiffres', sub: '0-9', size: 10 },
-    { name: 'Minuscules', sub: 'a-z', size: 26 },
-    { name: '+ Majusc.', sub: 'a-z A-Z', size: 52 },
-    { name: '+ Chiffres', sub: 'a-z A-Z 0-9', size: 62 },
-    { name: '+ Symboles', sub: 'complet', size: fullSize },
-  ]
-  const nearest = rows.reduce((a, b) => (Math.abs(b - currentLen) < Math.abs(a - currentLen) ? b : a), rows[0])
+function TimeTable({ table, currentLen, highlightCol }: { table: SpeedTable; currentLen: number; highlightCol: number }) {
+  const rows = table.rows
+  const nearest = rows.reduce((a, b) => (Math.abs(b.length - currentLen) < Math.abs(a.length - currentLen) ? b : a), rows[0])
   return (
     <div className="pw-table-wrap">
       <table className="pw-table">
         <thead>
           <tr>
-            <th className="pw-th-len">Longueur</th>
-            {cols.map((c) => <th key={c.name}>{c.name}<span className="pw-th-sub">{c.sub}</span></th>)}
+            <th className="pw-th-len">{t('Longueur')}</th>
+            {table.columns.map((c) => <th key={c.name}>{t(c.name)}<span className="pw-th-sub">{t(c.detail)}</span></th>)}
           </tr>
         </thead>
         <tbody>
-          {rows.map((len) => (
-            <tr key={len}>
-              <th>{len}</th>
-              {cols.map((c) => {
-                const { label, strength } = compactTime(Math.pow(c.size, len) / 1e10)
-                const hot = len === nearest && c.name === '+ Symboles'
-                return <td key={c.name} className={strengthClass(strength) + (hot ? ' is-current' : '')}>{label}</td>
+          {rows.map((row) => (
+            <tr key={row.length}>
+              <th>{row.length}</th>
+              {row.cells.map((cell, ci) => {
+                const hot = row.length === nearest.length && ci === highlightCol
+                return <td key={ci} className={strengthClass(cell.strength) + (hot ? ' is-current' : '')}>{t(cell.human)}</td>
               })}
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="pw-hint">Durée estimée pour épuiser l'espace à ~10 milliards d'essais/s. La case entourée suit ta longueur actuelle.</p>
-    </div>
-  )
-}
-
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="kv">
-      <span className="kv-label">{label}</span>
-      <span className={'kv-value' + (mono ? ' mono' : '')}>{value}</span>
     </div>
   )
 }

@@ -8,18 +8,21 @@ import Playback from '../cipher/Playback'
 import CaesarViz from '../cipher/CaesarViz'
 import PlayfairViz from '../cipher/PlayfairViz'
 import HillViz from '../cipher/HillViz'
+import { t, _t } from '../../i18n'
 
 export type U = 'a' | 'b'
 export const OTHER: Record<U, U> = { a: 'b', b: 'a' }
 export const UP = (u: U) => u.toUpperCase()
-export const NAME: Record<Algo, string> = { caesar: 'César', playfair: 'Playfair', hill: 'Hill' }
+// nom de l'algorithme, en français (à passer dans t() pour l'afficher : algoName)
+export const NAME: Record<Algo, string> = { caesar: _t('César'), playfair: 'Playfair', hill: 'Hill' }
+export const algoName = (a: Algo) => t(NAME[a])
 
 /** 1234567890123 → « 12345…90123 » (le nombre complet reste dans l'info-bulle). */
 export function short(s: string, k = 5): string {
   return s.length <= 2 * k + 3 ? s : s.slice(0, k) + '…' + s.slice(-k)
 }
 
-/** La clé symétrique en clair, telle qu'elle voyage dans le coffre. */
+/** La clé symétrique en clair, telle qu'elle voyage dans le coffre (en français : t() la traduit à l'affichage). */
 export function keyText(p: ExchangeParams): string {
   if (p.algo === 'caesar') return `${p.shift} · ${p.direction === 'left' ? 'gauche' : 'droite'}`
   if (p.algo === 'playfair') return p.key ?? ''
@@ -116,7 +119,7 @@ export function KeyField({ kind, owner, k, hidden, iconHidden, fieldRef, iconRef
     <div ref={fieldRef} className={`ex-kp ex-from-${owner}` + (hidden ? ' is-hidden' : '')} title={full}>
       <div className="ex-kp-text">
         <span className="ex-kp-label">
-          {kind === 'pub' ? 'Clé publique' : 'Clé privée'} de {UP(owner)}
+          {t(kind === 'pub' ? 'Clé publique de {u}' : 'Clé privée de {u}', { u: UP(owner) })}
           <span className="ex-kp-pair">{kind === 'pub' ? ' (e, n)' : ' (d, n)'}</span>
         </span>
         <span className="ex-kp-val">{val}</span>
@@ -146,8 +149,8 @@ export function TraceView({ view }: { view: BoxView }) {
   const atEnd = pb.index >= total - 1
   return (
     <div className="ex-trace">
-      <div className="ex-sec-title" title={keyShort(params) !== keyText(params) ? keyText(params) : undefined}>
-        {view.op === 'encrypt' ? 'Chiffrement' : 'Déchiffrement'} {NAME[params.algo]} · clé {keyShort(params)}
+      <div className="ex-sec-title" title={keyShort(params) !== keyText(params) ? t(keyText(params)) : undefined}>
+        {t(view.op === 'encrypt' ? 'Chiffrement {algo} · clé {key}' : 'Déchiffrement {algo} · clé {key}', { algo: algoName(params.algo), key: t(keyShort(params)) })}
       </div>
       {trace.kind === 'caesar' && <CaesarViz trace={trace} index={pb.index} showResult />}
       {trace.kind === 'playfair' && <PlayfairViz trace={trace} index={pb.index} original={original} showResult />}
@@ -156,7 +159,7 @@ export function TraceView({ view }: { view: BoxView }) {
         playing={pb.playing} speed={pb.speed} setSpeed={pb.setSpeed}
         play={pb.play} pause={pb.pause} step={pb.step} reset={pb.reset} atEnd={atEnd}
       />
-      <div className="step-counter">Étape {Math.max(0, pb.index + 1)} / {total}</div>
+      <div className="step-counter">{t('Étape {i} / {n}', { i: Math.max(0, pb.index + 1), n: total })}</div>
     </div>
   )
 }

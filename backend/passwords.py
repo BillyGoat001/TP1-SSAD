@@ -6,31 +6,36 @@ TOUT repose sur une seule formule :
 
         temps de craquage  =  espace de recherche  /  vitesse de l'attaquant
 
-et chaque protection déplace l'un des deux termes :
-  - une POLITIQUE (classes de caractères exigées, longueur minimale) agrandit
-    l'espace que l'attaquant doit forcément parcourir ;
-  - la LIMITE DE TENTATIVES (verrouillage) et le HACHAGE LENT (PBKDF2) font
-    chuter la vitesse de l'attaquant.
-
 Trois cas cible de l'énoncé :
   - "binaire"   : 3 caractères dans {0,1}        -> 2^3 = 8
   - "numerique" : 4 caractères dans {1,2,3,4}     -> 4^4 = 256
   - "complexe"  : a-z A-Z 0-9 symboles, longueur choisie par l'utilisateur (0..64)
 
+Deux vraies attaques :
+  - force brute : on parcourt les combinaisons dans l'ordre jusqu'à la cible.
+    Pour les petits espaces (binaire, numérique) la boucle tourne réellement ;
+    pour l'espace complexe (3×10^15), aucune machine ne peut tout parcourir, donc
+    on calcule DIRECTEMENT le rang de la cible (le numéro d'essai auquel on
+    tomberait dessus) — c'est exact, et c'est ce rang qui pilote la progression.
+  - dictionnaire : on lit un vrai dictionnaire de fuites (rockyou, ~14,3 M de
+    mots réels, mots français courants en tête) mot par mot jusqu'à la cible.
+
+Une seule protection ralentit l'attaquant ici : LIMITER LE NOMBRE DE TENTATIVES
+(verrouillage du compte). Sur le mot de passe complexe s'ajoute une POLITIQUE
+(classes de caractères exigées, longueur minimale) : si le mot de passe ne la
+respecte pas, il est refusé avant même l'attaque.
+
 Uniquement la bibliothèque standard de Python : toute l'équipe peut lire et
 lancer ce fichier sans rien installer.
 """
 
-import hashlib
-import hmac
+import gzip
 import itertools
 import math
 import os
-import secrets
 import string
-import time
 
-# -- classes de caractères (cas complexe + protections) ----------------------
+# -- classes de caractères (cas complexe + politique) ------------------------
 LOWER = string.ascii_lowercase                 # 26
 UPPER = string.ascii_uppercase                 # 26
 DIGITS = string.digits                         # 10
@@ -49,36 +54,51 @@ CASES = {
     "numerique": {"charset": "1234",       "length": 4, "label": "4 caractères dans {1,2,3,4}"},
     "complexe":  {"charset": FULL_CHARSET, "length": 8, "label": "a-z  A-Z  0-9  symboles"},
 }
+SMALL_CASES = ("binaire", "numerique")        # espace imposé, pas de politique
 
-# -- hypothèses sur l'attaquant (affichées dans l'interface, ajustables) ------
-FAST_RATE = 1e10          # 10 milliards d'essais/s : un GPU sur un hash rapide
-SLOW_HASH_RATE = 6.5      # ~1 essai / 155 ms : PBKDF2 salé (cf. hash_password)
-LOCKOUT_ATTEMPTS = 10     # 10 essais autorisés...
-LOCKOUT_WINDOW = 300.0    # ...par tranche de 5 min, puis le compte se verrouille
-LOCKOUT_RATE = LOCKOUT_ATTEMPTS / LOCKOUT_WINDOW   # ~0,033 essai/s
+# -- hypothèse sur l'attaquant (affichée dans l'interface) --------------------
+# 10 milliards d'essais/s : un GPU sur un hachage rapide. Ordre de grandeur.
+FAST_RATE = 1e10
 
-# plafond : la démonstration de force brute « en direct » ne doit jamais figer
-MAX_ATTEMPTS = 1_000_000
+# Au-delà de cette taille d'espace, la boucle réelle figerait : on calcule le
+# rang de la cible au lieu de parcourir. En dessous, on parcourt pour de vrai.
+LIVE_LOOP_MAX = 5_000_000
 
-# Vrai dictionnaire d'attaque : mots de passe réels issus de fuites (listes
-# publiques NCSC 100k + rockyou + 10k-most-common), mots français courants
-# placés en tête. Chargé une seule fois depuis wordlist.txt, à côté de ce
-# fichier. C'est une VRAIE attaque par dictionnaire, pas une simulation.
-_WORDLIST_PATH = os.path.join(os.path.dirname(__file__), "wordlist.txt")
+# Vrai dictionnaire d'attaque, compressé à côté de ce fichier (lu en flux, donc
+# tient dans la mémoire d'un petit hébergement). Repli minimal si absent.
+_WORDLIST_GZ = os.path.join(os.path.dirname(__file__), "wordlist.txt.gz")
+_WORDLIST_TXT = os.path.join(os.path.dirname(__file__), "wordlist.txt")
 _FALLBACK = ["azerty", "motdepasse", "soleil", "123456", "password", "qwerty",
              "bonjour", "coucou", "doudou", "iloveyou", "admin", "sunshine"]
 
-
-def _load_wordlist():
-    try:
-        with open(_WORDLIST_PATH, encoding="utf-8") as f:
-            words = [w.rstrip("\n") for w in f if w.strip()]
-        return words if words else list(_FALLBACK)
-    except OSError:
-        return list(_FALLBACK)
+_dict_size = None          # taille du dictionnaire, comptée une seule fois
 
 
-DEFAULT_DICTIONARY = _load_wordlist()
+def _iter_words():
+    """Parcourt le dictionnaire mot par mot, sans tout charger en mémoire."""
+    if os.path.exists(_WORDLIST_GZ):
+        with gzip.open(_WORDLIST_GZ, "rt", encoding="latin-1", newline="\n") as f:
+            for line in f:
+                w = line.rstrip("\n")
+                if w:
+                    yield w
+    elif os.path.exists(_WORDLIST_TXT):
+        with open(_WORDLIST_TXT, encoding="latin-1") as f:
+            for line in f:
+                w = line.rstrip("\n")
+                if w:
+                    yield w
+    else:
+        for w in _FALLBACK:
+            yield w
+
+
+def dictionary_size():
+    """Nombre de mots du dictionnaire (compté une fois, puis mémorisé)."""
+    global _dict_size
+    if _dict_size is None:
+        _dict_size = sum(1 for _ in _iter_words())
+    return _dict_size
 
 
 # ---------------------------------------------------------------- helpers ----
@@ -97,58 +117,94 @@ def _resolve_case(case, length=None):
     return cfg["charset"], chosen, cfg["label"]
 
 
-def _grp(x):
-    """Entier arrondi, groupé à la française : 12345 -> '12 345'."""
-    return f"{int(round(x)):,}".replace(",", " ")
+# ---- mise en forme française -------------------------------------------------
+NBSP = " "
+
+
+def _round2(x):
+    """x arrondi à 2 chiffres significatifs : 1234 -> 1200 ; 0,0333 -> 0,033."""
+    return float(f"{x:.2g}")
+
+
+def _num(x):
+    """Nombre à la française : 1.2 -> '1,2' ; 15.0 -> '15' ; 45000 -> '45 000'."""
+    if x == int(x):
+        return f"{int(x):,}".replace(",", NBSP)
+    return f"{x:g}".replace(".", ",")
+
+
+def _plural(n):
+    return "s" if n >= 2 else ""
 
 
 def fmt_count(n):
     """Nombre de combinaisons lisible : groupé si petit, sinon notation
     scientifique française (3,4 × 10^15)."""
     if n < 1_000_000_000:
-        return f"{n:,}".replace(",", " ")
+        return f"{n:,}".replace(",", NBSP)
     s = str(int(n))
     exp = len(s) - 1
     return f"{s[0]},{s[1:3]} × 10^{exp}"
 
 
-YEAR = 31_536_000.0  # secondes dans une année
+def fmt_rate(r):
+    """Vitesse d'un attaquant : 1e10 -> '10 milliards d'essais/s'."""
+    if r >= 1e9:
+        n = _round2(r / 1e9)
+        return f"{_num(n)} milliard{_plural(n)} d'essais/s"
+    if r >= 1e6:
+        n = _round2(r / 1e6)
+        return f"{_num(n)} million{_plural(n)} d'essais/s"
+    n = _round2(r)
+    return f"{_num(n)} essai{_plural(n)}/s"
 
 
-def human_time(seconds):
+YEAR = 31_536_000.0                  # secondes dans une année
+
+
+def human_time(seconds, compact=False):
     """(libellé français, catégorie de force) pour une durée en secondes.
+
+    UNE SEULE échelle pour tout le site : les phrases complètes et les libellés
+    courts du tableau (compact=True) sortent d'ici, avec les mêmes seuils.
     Catégories : instant / faible / moyen / fort / inviolable."""
     s = seconds
     if s is None or s == float("inf"):
-        return "des milliards d'années", "inviolable"
+        return "10^100+ ans", "inviolable"
     if s < 1e-3:
         return "instantané", "instant"
     if s < 1:
-        return "moins d'une seconde", "instant"
+        return ("< 1 s" if compact else "moins d'une seconde"), "instant"
     if s < 60:
         return f"{s:.0f} s", "faible"
     if s < 3600:
-        return f"{s/60:.0f} min", "faible"
+        return f"{s / 60:.0f} min", "faible"
     if s < 86400:
-        return f"{s/3600:.0f} h", "moyen"
+        return f"{s / 3600:.0f} h", "moyen"
     if s < 2_592_000:               # < 30 jours
         n = round(s / 86400)
-        return (f"{n} jour" if n == 1 else f"{n} jours"), "moyen"
+        return (f"{n} j" if compact else (f"{n} jour" if n == 1 else f"{n} jours")), "moyen"
     if s < YEAR:
-        return f"{s/2_592_000:.0f} mois", "moyen"
-    if s < 1000 * YEAR:
-        n = round(s / YEAR)
-        return (f"{n} an" if n == 1 else f"{_grp(n)} ans"), "fort"
-    if s < 1e6 * YEAR:
-        return "des siècles", "fort"
-    if s < 1e9 * YEAR:
-        return "des millions d'années", "inviolable"
-    return "des milliards d'années", "inviolable"
+        return f"{s / 2_592_000:.0f} mois", "moyen"
+    y = s / YEAR
+    # années -> siècles -> millénaires -> puissances de 10. Pas de « milliards
+    # d'années » ni de plafond « > Univers » : au-delà, on passe en 10^k ans.
+    if y < 100:
+        n = round(y)
+        return ("1 an" if n == 1 else f"{_num(n)} ans"), "fort"
+    if y < 1000:
+        c = round(y / 100)
+        return (f"{c} siècle" if c == 1 else f"{c} siècles"), "fort"
+    if y < 1_000_000:
+        m = round(y / 1000)
+        return (f"{m} millénaire" if m == 1 else f"{m} millénaires"), "inviolable"
+    k = int(math.floor(math.log10(y)))
+    return f"10^{k} ans", "inviolable"
 
 
-def estimate_for(alphabet_size, length, rate):
-    """Estimation { espace, vitesse, temps } pour un alphabet et une longueur."""
-    space = int(alphabet_size) ** int(length)      # entier exact (gros possible)
+def estimate_for(alphabet_size, length, rate=FAST_RATE):
+    """Estimation { espace, bits, temps } pour un alphabet et une longueur."""
+    space = int(alphabet_size) ** int(length)
     try:
         seconds = space / rate
     except OverflowError:
@@ -159,6 +215,7 @@ def estimate_for(alphabet_size, length, rate):
         "length": int(length),
         "keyspace": float(space) if space < 1e300 else None,
         "keyspaceText": fmt_count(space),
+        "bits": round(math.log2(space), 1) if space > 1 else 0.0,
         "seconds": None if seconds == float("inf") else seconds,
         "human": human,
         "strength": strength,
@@ -166,8 +223,38 @@ def estimate_for(alphabet_size, length, rate):
     }
 
 
-# ------------------------------------------------------- analyse de force ----
-def _classes_present(password):
+# ------------------------------------------------------- tableau des durées ----
+TABLE_LENGTHS = [4, 6, 8, 10, 12, 16]
+TABLE_ALPHABETS = [                      # (nom, détail, taille de l'alphabet)
+    ("Chiffres", "0-9", 10),
+    ("Minuscules", "a-z", 26),
+    ("+ Majusc.", "a-z A-Z", 52),
+    ("+ Chiffres", "a-z A-Z 0-9", 62),
+    ("+ Symboles", "complet", len(FULL_CHARSET)),
+]
+
+
+def speed_table(rate=FAST_RATE):
+    """Durée pour épuiser l'espace, selon la longueur et le type de caractères.
+    Mêmes seuils et mêmes mots que le reste du site."""
+    rows = []
+    for length in TABLE_LENGTHS:
+        cells = []
+        for _name, _detail, size in TABLE_ALPHABETS:
+            human, strength = human_time((size ** length) / rate, compact=True)
+            cells.append({"human": human, "strength": strength})
+        rows.append({"length": length, "cells": cells})
+    return {
+        "columns": [{"name": n, "detail": d, "size": z} for n, d, z in TABLE_ALPHABETS],
+        "rows": rows,
+        "rate": rate,
+        "rateText": fmt_rate(rate),
+    }
+
+
+# ------------------------------------------------------- politique (complexe) ----
+def classes_present(password):
+    """Ensemble des classes de caractères présentes dans le mot de passe."""
     present = set()
     for ch in password:
         if ch in LOWER:
@@ -176,166 +263,178 @@ def _classes_present(password):
             present.add("upper")
         elif ch in DIGITS:
             present.add("digit")
-        else:
+        elif ch in SYMBOLS:
             present.add("symbol")
+        else:
+            present.add("other")          # hors du jeu autorisé
     return present
 
 
-def _alphabet_size(classes):
-    size = sum(CLASS_SIZES.get(c, len(SYMBOLS)) for c in classes)
-    return max(1, size)
+def detected_charset(target):
+    """Jeu de caractères RÉELLEMENT utilisé par le mot de passe (cas complexe).
+    Un mot de passe en minuscules seules donne 'a-z' (26), pas le jeu complet :
+    la force brute n'a pas à supposer des symboles qui ne sont pas là."""
+    present = classes_present(target) - {"other"}
+    parts = []
+    if "lower" in present:
+        parts.append(LOWER)
+    if "upper" in present:
+        parts.append(UPPER)
+    if "digit" in present:
+        parts.append(DIGITS)
+    if "symbol" in present:
+        parts.append(SYMBOLS)
+    return "".join(parts)
 
 
-def _ratio_badge(ratio):
-    """(texte, sens) comparant le temps protégé au temps non protégé.
-    sens ∈ {longer, shorter, equal}."""
-    if ratio == float("inf"):
-        return "× 10^18+ plus long", "longer"
-    if ratio != ratio:  # NaN (inf / inf)
-        return "temps identique", "equal"
-    if ratio > 1.5:
-        txt = f"× {ratio:.0f}" if ratio < 1000 else f"× 10^{int(math.log10(ratio))}"
-        return txt + " plus long", "longer"
-    if 0 < ratio < 0.67:
-        m = 1.0 / ratio
-        txt = f"÷ {m:.0f}" if m < 1000 else f"÷ 10^{int(math.log10(m))}"
-        return txt + " plus court", "shorter"
-    if ratio == 0:
-        return "÷ 10^18+ plus court", "shorter"
-    return "temps identique", "equal"
+_CLASS_LABEL = {"lower": "une minuscule", "upper": "une majuscule",
+                "digit": "un chiffre", "symbol": "un symbole"}
 
 
-def analyze(password, protections=None):
-    """Compare le temps de craquage SANS protection et AVEC les protections
-    activées (politique + verrouillage + hachage lent)."""
-    p = protections or {}
+def validate(target, case, length=None, rules=None):
+    """Le mot de passe est-il valide pour ce cas / cette politique ?
+    Renvoie { valid, reasons: [...] } ; `reasons` liste ce qui manque."""
+    charset, fixed_len, _label = _resolve_case(case, length)
+    reasons = []
 
-    # --- sans protection : le mot de passe tel quel, attaquant rapide ---
-    classes0 = _classes_present(password) or {"lower"}
-    a0 = _alphabet_size(classes0)
-    l0 = max(1, len(password))
-    unprotected = estimate_for(a0, l0, FAST_RATE)
+    if case in SMALL_CASES:
+        extra = set(target) - set(charset)
+        if extra:
+            reasons.append(f"caractères non autorisés : {' '.join(sorted(extra))}")
+        if len(target) != fixed_len:
+            reasons.append(f"il faut exactement {fixed_len} caractères")
+        return {"valid": not reasons, "reasons": reasons}
 
-    # --- avec protection : la politique impose un jeu de caractères et une
-    #     longueur minimale ; verrouillage / hachage lent réduisent la vitesse.
-    #     Le jeu de caractères protégé = EXACTEMENT les classes activées : en
-    #     retirer une réduit l'espace (donc rend l'attaque PLUS rapide).
-    required = set()
-    if p.get("require_lower"):
-        required.add("lower")
-    if p.get("require_upper"):
-        required.add("upper")
-    if p.get("require_digit"):
-        required.add("digit")
-    if p.get("require_symbol"):
-        required.add("symbol")
-    a1 = _alphabet_size(required)            # aucune classe -> 1 -> instantané
-
-    min_len = p.get("min_length")
-    l1 = max(l0, int(min_len)) if min_len else l0
-    l1 = min(64, l1)
-
-    rate1 = FAST_RATE
-    notes = []
-    if p.get("slow_hash"):
-        rate1 = min(rate1, SLOW_HASH_RATE)
-        notes.append("hachage lent")
-    if p.get("limit_attempts"):
-        rate1 = min(rate1, LOCKOUT_RATE)
-        notes.append("tentatives limitées")
-
-    protected = estimate_for(a1, l1, rate1)
-    protected["rateNotes"] = notes
-
-    us = unprotected["seconds"]
-    ps = protected["seconds"]
-    us = float("inf") if us is None else (us if us > 0 else 1e-12)
-    ps = float("inf") if ps is None else ps
-    ratio = float("inf") if (ps == float("inf") and us != float("inf")) else ps / us
-    factor_text, direction = _ratio_badge(ratio)
-
-    return {
-        "unprotected": unprotected,
-        "protected": protected,
-        "factorText": factor_text,
-        "direction": direction,
-    }
+    # --- cas complexe : jeu autorisé + politique optionnelle ---
+    r = rules or {}
+    present = classes_present(target)
+    if "other" in present:
+        reasons.append("caractères hors du jeu autorisé")
+    if len(target) == 0:
+        reasons.append("mot de passe vide")
+    for key, flag in (("lower", "require_lower"), ("upper", "require_upper"),
+                      ("digit", "require_digit"), ("symbol", "require_symbol")):
+        if r.get(flag) and key not in present:
+            reasons.append(f"il manque {_CLASS_LABEL[key]}")
+    min_len = r.get("min_length")
+    if min_len and len(target) < int(min_len):
+        reasons.append(f"longueur minimale : {int(min_len)} (actuelle : {len(target)})")
+    return {"valid": not reasons, "reasons": reasons}
 
 
-# -------------------------------------------------------------- attaques ----
-def brute_force(target, case, length=None):
-    """Essaie toutes les combinaisons du charset du cas jusqu'à trouver la
-    cible (plafonnée à MAX_ATTEMPTS). Renvoie aussi l'ESTIMATION réaliste :
-    c'est elle le vrai verdict, pas le temps de notre petite boucle."""
+# -------------------------------------------------------------- force brute ----
+def rank_of(target, charset, length):
+    """Numéro d'essai (1-based) auquel la force brute, parcourant les
+    combinaisons dans l'ordre, tomberait sur la cible. None si la cible n'est
+    pas une combinaison valide de ce charset / cette longueur."""
+    if len(target) != length:
+        return None
+    base = len(charset)
+    idx = {c: i for i, c in enumerate(charset)}
+    r = 0
+    for ch in target:
+        if ch not in idx:
+            return None
+        r = r * base + idx[ch]
+    return r + 1
+
+
+def brute_force(target, case, length=None, limit=None, rules=None, know_composition=True):
+    """Prépare la force brute : valide la cible, donne l'espace, l'estimation
+    pire-cas, et le rang exact de la cible (le front anime la progression).
+
+    `limit` : si une limite de tentatives est active, l'attaque s'arrête à ce
+    nombre d'essais ; craqué seulement si le rang y est inférieur ou égal.
+    `know_composition` : si vrai (et cas complexe), l'attaquant connaît les
+    classes réellement présentes et restreint son jeu de caractères ; sinon il
+    suppose le pire cas (jeu complet)."""
     charset, length, label = _resolve_case(case, length)
+    check = validate(target, case, length, rules)
+
+    # cas complexe : l'attaquant qui CONNAÎT la composition restreint son jeu de
+    # caractères (minuscules seules -> 26, pas 86). Sinon il garde le jeu complet.
+    if case == "complexe" and know_composition:
+        detected = detected_charset(target)
+        if detected:
+            charset = detected
+
     space = keyspace(charset, length)
     est = estimate_for(len(charset), length, FAST_RATE)
 
-    start = time.perf_counter()
-    attempts = 0
-    found = False
-    stopped = False
-    if length == 0:
-        found = (target == "")
-    else:
+    really_looped = False
+    if not check["valid"]:
+        rank = None
+    elif space <= LIVE_LOOP_MAX:
+        # petit espace : on parcourt POUR DE VRAI jusqu'à la cible
+        really_looped = True
+        rank = None
+        attempts = 0
         for combo in itertools.product(charset, repeat=length):
             attempts += 1
             if "".join(combo) == target:
-                found = True
+                rank = attempts
                 break
-            if attempts >= MAX_ATTEMPTS:
-                stopped = True
-                break
+    else:
+        # espace astronomique : la boucle figerait, on calcule le rang exact
+        rank = rank_of(target, charset, length)
+
+    cracked = rank is not None and (limit is None or rank <= int(limit))
+
+    # temps pour ATTEINDRE la cible (au rang trouvé), à la vitesse de référence
+    if rank is not None:
+        find_seconds = rank / FAST_RATE
+        find_human, find_strength = human_time(find_seconds)
+    else:
+        find_seconds, find_human, find_strength = None, None, None
+
     return {
-        "found": found,
-        "stopped": stopped,
-        "password": target if found else None,
-        "attempts": attempts,
-        "seconds": time.perf_counter() - start,
-        "keyspace": float(space) if space < 1e300 else None,
-        "keyspaceText": fmt_count(space),
+        "valid": check["valid"],
+        "reasons": check["reasons"],
+        "charset": charset,
         "charsetSize": len(charset),
         "length": length,
         "label": label,
-        "estimate": est,
+        "keyspace": float(space) if space < 1e300 else None,
+        "keyspaceText": fmt_count(space),
+        "rate": FAST_RATE,
+        "rateText": fmt_rate(FAST_RATE),
+        "worstCaseSeconds": est["seconds"],
+        "worstCaseHuman": est["human"],
+        "strength": est["strength"],
+        "rank": rank,                         # essais pour atteindre la cible
+        "findSeconds": find_seconds,
+        "findHuman": find_human,              # temps pour atteindre la cible
+        "findStrength": find_strength,
+        "reallyLooped": really_looped,        # True = boucle réelle, pas un calcul
+        "limit": int(limit) if limit is not None else None,
+        "cracked": cracked,
     }
 
 
-def dictionary_attack(target, words=None):
-    """Essaie chaque mot de la liste (anglais + français) jusqu'à la cible."""
-    words = words if words else DEFAULT_DICTIONARY
-    start = time.perf_counter()
-    attempts = 0
-    for w in words:
-        attempts += 1
+# -------------------------------------------------------------- dictionnaire ----
+def dictionary_attack(target, limit=None):
+    """Lit le dictionnaire mot par mot jusqu'à la cible (ou la limite de
+    tentatives). Renvoie la position trouvée et la taille totale."""
+    size = dictionary_size()
+    pos = 0
+    for w in _iter_words():
+        pos += 1
+        if limit is not None and pos > int(limit):
+            return {"found": False, "stopped": True, "position": None,
+                    "scanned": pos - 1, "size": size, "limit": int(limit)}
         if w == target:
-            return {
-                "found": True, "password": target, "attempts": attempts,
-                "seconds": time.perf_counter() - start, "size": len(words),
-            }
+            return {"found": True, "stopped": False, "password": target,
+                    "position": pos, "scanned": pos, "size": size,
+                    "limit": int(limit) if limit is not None else None}
+    return {"found": False, "stopped": False, "position": None,
+            "scanned": size, "size": size,
+            "limit": int(limit) if limit is not None else None}
+
+
+# ------------------------------------------------------------- hypothèses ----
+def assumptions():
     return {
-        "found": False, "attempts": attempts,
-        "seconds": time.perf_counter() - start, "size": len(words),
+        "fastRate": FAST_RATE,
+        "fastRateText": fmt_rate(FAST_RATE),
+        "liveLoopMax": LIVE_LOOP_MAX,
     }
-
-
-# ------------------------------------------------------------ protection ----
-def hash_password(password, iterations=200_000):
-    """Protection concrète : hachage lent et salé. On ne stocke jamais le mot
-    de passe en clair, seulement cette empreinte."""
-    salt = secrets.token_bytes(16)
-    start = time.perf_counter()
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
-    elapsed = time.perf_counter() - start
-    return {
-        "algo": "PBKDF2-HMAC-SHA256",
-        "salt": salt.hex(),
-        "iterations": iterations,
-        "hash": dk.hex(),
-        "secondsPerGuess": elapsed,
-    }
-
-
-def verify_password(password, salt_hex, iterations, hash_hex):
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt_hex), iterations)
-    return hmac.compare_digest(dk.hex(), hash_hex)

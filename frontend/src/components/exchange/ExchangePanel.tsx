@@ -6,10 +6,11 @@ import { api, type CipherInput } from '../../api'
 import HillMatrixInput from '../cipher/HillMatrixInput'
 import { Fx } from './fx'
 import {
-  type U, type BoxView, OTHER, UP, NAME, keyText, keyShort, short, clip,
+  type U, type BoxView, OTHER, UP, NAME, algoName, keyText, keyShort, short, clip,
   KeyField, TraceView, Letters, UserIcon, Arrow, EyeOpen, EyeOff,
 } from './parts'
 import Chat, { type ChatMsg } from './Chat'
+import { t, _t, plural, getLang } from '../../i18n'
 
 // Partie 2 — Échange entre deux personnes.
 // Chaque utilisateur a une vraie paire de clés RSA (générée par le backend
@@ -21,12 +22,16 @@ import Chat, { type ChatMsg } from './Chat'
 
 const SIZES = [32, 64, 128, 512, 1024, 2048]
 const ALGOS: Algo[] = ['caesar', 'playfair', 'hill']
-const BACKEND_DOWN = 'Backend injoignable. Lance le serveur Python.'
+const BACKEND_DOWN = _t('Backend injoignable. Lance le serveur Python.')
 const EMPTY_2X2 = [['', ''], ['', '']]
 // Toute l'animation (coffre, clé, boîte) est ralentie d'autant : 1 = vitesse d'origine.
 const SLOW = 1.25
 
-interface Pending { params: ExchangeParams; cipher: string; plain: string }
+interface Pending {
+  params: ExchangeParams; cipher: string; plain: string
+  // mise en forme du message, pour que le destinataire retrouve les espaces et les J
+  layout: [number, string][]; fillers: number[]; jmap: number[]; cases: number[]
+}
 interface UserState {
   algo: Algo
   shift: string               // César : uniquement des chiffres, vide au départ
@@ -66,10 +71,11 @@ function paramsOf(s: UserState): ExchangeParams {
   if (s.algo === 'playfair') return { algo: 'playfair', key: s.pfKey }
   return { algo: 'hill', matrix: s.hillCells }
 }
-function cipherInput(p: ExchangeParams, operation: 'encrypt' | 'decrypt', message: string): CipherInput {
-  return { algo: p.algo, operation, message, shift: p.shift, direction: p.direction, key: p.key, matrix: p.matrix }
+function cipherInput(p: ExchangeParams, operation: 'encrypt' | 'decrypt', message: string,
+  layout?: [number, string][], fillers?: number[], jmap?: number[], cases?: number[]): CipherInput {
+  return { algo: p.algo, operation, message, shift: p.shift, direction: p.direction, key: p.key, matrix: p.matrix, layout, fillers, jmap, cases }
 }
-const cleanMessage = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
+const cleanMessage = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '')   // accents retirés, casse gardée
 const si = (i: number) => ({ '--i': i }) as CSSProperties // rang dans l'apparition en cascade
 
 export default function ExchangePanel({ active }: { active: boolean }) {
@@ -116,6 +122,33 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     setBusyState(v)
   }
 
+  // La conversation est rangée dans un fichier du backend : on la retrouve au chargement.
+  useEffect(() => {
+    let alive = true
+    api.conversationList()
+      .then((r) => {
+        if (!alive || !r.ok || r.messages.length === 0) return
+        setChat((c) => {
+          const known = new Set(c.map((m) => m.id))
+          return [...r.messages.filter((m) => !known.has(m.id)), ...c]
+        })
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  // Supprime toute la conversation : à l'écran tout de suite, puis dans le fichier
+  // (si le fichier n'a pas pu être vidé, on réaffiche ce qu'il contient encore).
+  function clearChat() {
+    setChat([])
+    api.conversationClear()
+      .then((r) => { if (!r.ok) reloadChat() })
+      .catch(reloadChat)
+  }
+  function reloadChat() {
+    api.conversationList().then((r) => { if (r.ok) setChat(r.messages as ChatMsg[]) }).catch(() => {})
+  }
+
   // Tant que la messagerie est repliée, ses champs ne doivent pas recevoir le focus.
   useEffect(() => {
     for (const k of ['a-reveal', 'b-reveal', 'a-boxrev', 'b-boxrev']) refs.current[k]?.toggleAttribute('inert', !revealed)
@@ -130,6 +163,9 @@ export default function ExchangePanel({ active }: { active: boolean }) {
       t.style.height = `${t.scrollHeight + 2}px`
     }
   }, [users.a.clear, users.b.clear, revealed])
+
+  // Quitter l'onglet Chiffrement (la partie est alors démontée) arrête les animations en cours.
+  useEffect(() => () => { token.current++; fxRef.current?.clear() }, [])
 
   // Quitter la partie « Échange » au milieu d'une animation l'interrompt proprement.
   useEffect(() => {
@@ -163,7 +199,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     setHid({})
     setGenError(null)
     setLastSent(null)
-    setChat([])
+    // (la conversation n'est pas effacée : elle est rangée dans son fichier, voir backend/storage.py)
   }
 
   // ------------------------------------------- 1. génération + échange ----
@@ -177,7 +213,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     let ka: RsaKey, kb: RsaKey
     try {
       const [ra, rb] = await Promise.all([api.rsaKeygen(bits), api.rsaKeygen(bits)])
-      if (!ra.ok || !ra.key || !rb.ok || !rb.key) throw new Error(ra.error || rb.error || 'Génération impossible.')
+      if (!ra.ok || !ra.key || !rb.ok || !rb.key) throw new Error(ra.error || rb.error || _t('Génération impossible.'))
       ka = ra.key
       kb = rb.key
     } catch (e) {
@@ -243,7 +279,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     if (!ok()) return null
     const step = Math.min(42, 900 / Math.max(1, outText.length))
     updNow(u, {
-      emerge: { n, text: outText, step, label: view.op === 'encrypt' ? 'Message chiffré' : 'Message déchiffré', cipher: view.op === 'encrypt' },
+      emerge: { n, text: outText, step, label: view.op === 'encrypt' ? _t('Message chiffré') : _t('Message déchiffré'), cipher: view.op === 'encrypt' },
     })
     await F.wait(350)
     if (!ok()) return null
@@ -255,10 +291,10 @@ export default function ExchangePanel({ active }: { active: boolean }) {
 
   // ----------------------------------------------------- 2. chiffrer ----
   function validate(s: UserState): string | null {
-    if (!/[A-Z]/.test(s.clear)) return 'Écris un message (au moins une lettre).'
+    if (!/[A-Za-z]/.test(s.clear)) return 'Écris un message (au moins une lettre).'
     if (s.algo === 'caesar' && !/^\d+$/.test(s.shift)) return 'Indique le décalage : un nombre entier positif.'
     if (s.algo === 'playfair' && !/[A-Z]/i.test(s.pfKey)) return 'Indique la clé Playfair : au moins une lettre.'
-    if (s.algo === 'hill' && !s.matrixValid) return 'Remplis toutes les cases de la matrice avec des nombres entiers.'
+    if (s.algo === 'hill' && !s.matrixValid) return _t('Remplis toutes les cases de la matrice avec des nombres entiers.')
     return null
   }
 
@@ -287,6 +323,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
       return
     }
     const result = resp.result, trace = resp.trace
+    const layout = resp.layout ?? [], fillers = resp.fillers ?? [], jmap = resp.jmap ?? [], cases = resp.cases ?? []
     upd(u, { warning: resp.warning ?? null })
     const F = fx()
     // la vue se cadre sur le champ du message et le haut de la boîte, puis le message part
@@ -302,7 +339,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     const strip = await feedBox(u, u, { op: 'encrypt', trace, original: text, params }, text, result, ok)
     if (!ok()) return
     if (!strip) {
-      updNow(u, { enc: result, pending: { params, cipher: result, plain: text }, emerge: null })
+      updNow(u, { enc: result, pending: { params, cipher: result, plain: text, layout, fillers, jmap, cases }, emerge: null })
       setBusy(false)
       return
     }
@@ -313,7 +350,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     updNow(u, { emerge: null })
     await F.go(f2, F.ctr(el(`${u}-enc`)), { ms: 850 })
     if (!ok()) return
-    updNow(u, { enc: result, pending: { params, cipher: result, plain: text } })
+    updNow(u, { enc: result, pending: { params, cipher: result, plain: text, layout, fillers, jmap, cases } })
     F.flash(el(`${u}-enc`))
     f2.remove()
     setBusy(false)
@@ -338,7 +375,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     }
     if (!ok()) return
     if (!seal.ok || !seal.blocks || seal.payload == null) {
-      upd(u, { error: seal.error ?? 'Impossible de fermer le coffre.' })
+      upd(u, { error: seal.error ?? _t('Impossible de fermer le coffre.') })
       setBusy(false)
       return
     }
@@ -366,8 +403,8 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     // 2) l'algo utilisé, puis la clé, puis le message chiffré tombent dedans
     const algoBtn = el(`${u}-algo`).querySelector('.is-on') ?? el(`${u}-algo`)
     const ins: [string, Element, boolean][] = [
-      [NAME[p.params.algo], algoBtn, false],
-      [keyShort(p.params), el(`${u}-params`), false],
+      [algoName(p.params.algo), algoBtn, false],
+      [t(keyShort(p.params)), el(`${u}-params`), false],
       [clip(p.cipher, 48), el(`${u}-enc`), true],
     ]
     await Promise.all(ins.map(([t, src, ci], i) => F.wait(i * 420).then(async () => {
@@ -404,7 +441,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     if (!ok()) return
     if (!opened.ok || !opened.params) {
       F.clear()
-      upd(v, { error: opened.error ?? 'Impossible d\'ouvrir le coffre.' })
+      upd(v, { error: opened.error ?? _t('Impossible d\'ouvrir le coffre.') })
       setBusy(false)
       return
     }
@@ -445,8 +482,8 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     // 5) le chiffré rejoint son champ ; l'algo et la clé RELUS dans le coffre se rangent juste en dessous
     const outs: [string, string, 'recv' | 'ralgo' | 'rkey', boolean][] = [
       [clip(p.cipher, 48), p.cipher, 'recv', true],
-      [NAME[prm.algo], NAME[prm.algo], 'ralgo', false],
-      [keyShort(prm), keyText(prm), 'rkey', false],
+      [algoName(prm.algo), NAME[prm.algo], 'ralgo', false],     // affiché traduit, rangé en français
+      [t(keyShort(prm)), keyText(prm), 'rkey', false],
     ]
     await Promise.all([
       ...outs.map(([label, value, field, ci], i) => F.wait(i * 360).then(async () => {
@@ -468,7 +505,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
 
     // 6) le chiffré, l'algo et la clé rejoignent la boîte floutée ; le message déchiffré en ressort
     const decrypting: Promise<CipherResponse> = api
-      .cipher(cipherInput(prm, 'decrypt', p.cipher))
+      .cipher(cipherInput(prm, 'decrypt', p.cipher, p.layout, p.fillers, p.jmap, p.cases))
       .catch(() => ({ ok: false, error: BACKEND_DOWN }))
     await F.look([el(`${v}-recv`), { el: el(`${v}-box`), h: 230 }])
     if (!ok()) return
@@ -477,7 +514,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
       if (!ok()) return
       const src = el(`${v}-${field}`)
       const main = field === 'recv' // le chiffré arrive entier, l'algo et la clé s'effacent dans la boîte
-      const f = F.pill(field === 'rkey' ? keyShort(prm) : clip(src.textContent ?? '', 48), u, main, F.ctr(src))
+      const f = F.pill(field === 'rkey' ? t(keyShort(prm)) : clip(src.textContent ?? '', 48), u, main, F.ctr(src))
       await F.go(f, tgt, main ? { ms: 760 } : { s1: 0.5, o1: 0, ms: 760 })
       f.remove()
     })))
@@ -485,7 +522,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     const dr = await decrypting
     if (!ok()) return
     if (!dr.ok || !dr.trace || dr.result == null) {
-      upd(v, { error: dr.error ?? 'Déchiffrement impossible.' })
+      upd(v, { error: dr.error ?? _t('Déchiffrement impossible.') })
       setBusy(false)
       return
     }
@@ -508,7 +545,9 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     F.flash(el(`${v}-dec`))
     f4.remove()
     // le message rejoint la conversation
-    setChat((c) => [...c, { id: Date.now(), from: u, plain: p.plain, cipher: p.cipher, params: p.params }])
+    const msg: ChatMsg = { id: Date.now(), from: u, plain: p.plain, cipher: p.cipher, params: p.params }
+    setChat((c) => [...c, msg])
+    api.conversationAdd(msg).catch(() => {}) // rangé dans le fichier de la conversation
     setBusy(false)
   }
 
@@ -522,7 +561,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
       <section className={`ex-card ex-from-${u}`} ref={reg(`${u}-card`)}>
         <h3 className="ex-card-title">
           <span className="ex-avatar"><UserIcon /></span>
-          Utilisateur {UP(u)}
+          {t('Utilisateur {u}', { u: UP(u) })}
         </h3>
         <div className="ex-keys">
           <KeyField
@@ -540,13 +579,13 @@ export default function ExchangePanel({ active }: { active: boolean }) {
         <div className={'ex-reveal' + (revealed ? ' is-open' : '') + (revealDone ? ' is-done' : '')} ref={reg(`${u}-reveal`)}>
           <div className="ex-reveal-inner">
             <div className="ex-msg ex-stagger">
-              <div className="ex-msg-head" style={si(0)}>Messagerie de {UP(u)}</div>
+              <div className="ex-msg-head" style={si(0)}>{t('Messagerie de {u}', { u: UP(u) })}</div>
 
               <fieldset className="ex-cfg" disabled={busy} style={si(1)}>
                 <div className="segmented ex-algo" ref={reg(`${u}-algo`)}>
                   {ALGOS.map((a) => (
                     <button key={a} type="button" className={'seg' + (st.algo === a ? ' is-on' : '')} onClick={() => setAlgo(a)}>
-                      {NAME[a]}
+                      {algoName(a)}
                     </button>
                   ))}
                 </div>
@@ -554,29 +593,29 @@ export default function ExchangePanel({ active }: { active: boolean }) {
                   {st.algo === 'caesar' && (
                     <>
                       <label className="field">
-                        <span className="field-label">Décalage</span>
+                        <span className="field-label">{t('Décalage')}</span>
                         {/* uniquement des chiffres ; le champ s'élargit avec le nombre, sans dépasser la carte */}
                         <input
                           className="text-input ex-tint ex-shift" type="text" inputMode="numeric" autoComplete="off"
-                          placeholder="ex. 3" value={st.shift}
-                          style={{ width: `calc(${Math.max(5, st.shift.length + 1)}ch + 24px)` }}
+                          placeholder={t('ex. 3')} value={st.shift}
+                          style={{ width: `calc(${Math.max(7, st.shift.length + 1)}ch + 24px)` }}
                           onChange={(e) => upd(u, { shift: e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, ''), ...inval })}
                         />
                       </label>
                       <div className="field">
-                        <span className="field-label">Direction</span>
+                        <span className="field-label">{t('Direction')}</span>
                         <div className="segmented">
-                          <button type="button" className={'seg' + (st.direction === 'right' ? ' is-on' : '')} onClick={() => upd(u, { direction: 'right', ...inval })}>Droite</button>
-                          <button type="button" className={'seg' + (st.direction === 'left' ? ' is-on' : '')} onClick={() => upd(u, { direction: 'left', ...inval })}>Gauche</button>
+                          <button type="button" className={'seg' + (st.direction === 'right' ? ' is-on' : '')} onClick={() => upd(u, { direction: 'right', ...inval })}>{t('Droite')}</button>
+                          <button type="button" className={'seg' + (st.direction === 'left' ? ' is-on' : '')} onClick={() => upd(u, { direction: 'left', ...inval })}>{t('Gauche')}</button>
                         </div>
                       </div>
                     </>
                   )}
                   {st.algo === 'playfair' && (
                     <label className="field grow">
-                      <span className="field-label">Clé (lettres)</span>
+                      <span className="field-label">{t('Clé (lettres)')}</span>
                       <input
-                        className="text-input ex-tint" value={st.pfKey} placeholder="ex. PLAYFAIR" autoComplete="off"
+                        className="text-input ex-tint" value={st.pfKey} placeholder={t('ex. PLAYFAIR')} autoComplete="off"
                         onChange={(e) => upd(u, { pfKey: e.target.value.replace(/[^a-zA-Z ]/g, '').toUpperCase(), ...inval })}
                       />
                     </label>
@@ -589,23 +628,23 @@ export default function ExchangePanel({ active }: { active: boolean }) {
                   )}
                 </div>
                 <div className="ex-mfield">
-                  <span className="ex-mlabel">1 · Message clair (écrit par {UP(u)})</span>
+                  <span className="ex-mlabel">{t('1 · Message clair (écrit par {u})', { u: UP(u) })}</span>
                   <textarea
                     className="ex-minput ex-textarea" ref={reg(`${u}-clear`)} value={st.clear} rows={4} maxLength={2000}
-                    spellCheck={false} autoComplete="off" placeholder="Écris ton message, une phrase ou un paragraphe…"
+                    spellCheck={false} autoComplete="off" placeholder={t('Écris ton message, une phrase ou un paragraphe…')}
                     onChange={(e) => upd(u, { clear: cleanMessage(e.target.value), ...inval })}
                   />
                 </div>
               </fieldset>
 
               {(st.error || st.warning) && (
-                <div className={'warn' + (st.error ? ' error' : '')} style={si(2)}>{st.error ?? st.warning}</div>
+                <div className={'warn' + (st.error ? ' error' : '')} style={si(2)}>{t(st.error ?? st.warning)}</div>
               )}
               <button type="button" className="btn btn-accent ex-act" style={si(3)} onClick={() => doEncrypt(u)} disabled={busy}>
-                Chiffrer ↓
+                {t('Chiffrer ↓')}
               </button>
               <div className="ex-mfield" style={si(4)}>
-                <span className="ex-mlabel">2 · Chiffré à envoyer</span>
+                <span className="ex-mlabel">{t('2 · Chiffré à envoyer')}</span>
                 <span className="ex-val is-cipher" ref={reg(`${u}-enc`)}>{st.enc || '—'}</span>
               </div>
               {/* la flèche pointe vers le destinataire : B est à droite de A */}
@@ -614,26 +653,26 @@ export default function ExchangePanel({ active }: { active: boolean }) {
                 onClick={() => doSend(u)} disabled={busy || !st.pending}
               >
                 {u === 'b' && <Arrow dir="left" />}
-                Envoyer à {UP(v)}
+                {t('Envoyer à {u}', { u: UP(v) })}
                 {u === 'a' && <Arrow dir="right" />}
               </button>
               <div className="ex-sep" style={si(6)} />
               <div className={`ex-mfield ex-from-${v}`} style={si(7)}>
-                <span className="ex-mlabel">3 · Reçu de {UP(v)} (déchiffré)</span>
+                <span className="ex-mlabel">{t('3 · Reçu de {u} (déchiffré)', { u: UP(v) })}</span>
                 <span className="ex-val" ref={reg(`${u}-dec`)}>{st.dec || '—'}</span>
               </div>
               <div className={`ex-mfield ex-from-${v}`} style={si(8)}>
-                <span className="ex-mlabel">4 · Reçu de {UP(v)} (chiffré)</span>
+                <span className="ex-mlabel">{t('4 · Reçu de {u} (chiffré)', { u: UP(v) })}</span>
                 <span className="ex-val is-cipher" ref={reg(`${u}-recv`)}>{st.recv || '—'}</span>
               </div>
               <div className={`ex-meta ex-from-${v}`} style={si(9)}>
                 <div className="ex-mfield">
-                  <span className="ex-mlabel">Algo reçu</span>
-                  <span className="ex-val" ref={reg(`${u}-ralgo`)}>{st.ralgo || '—'}</span>
+                  <span className="ex-mlabel">{t('Algo reçu')}</span>
+                  <span className="ex-val" ref={reg(`${u}-ralgo`)}>{st.ralgo ? t(st.ralgo) : '—'}</span>
                 </div>
                 <div className="ex-mfield">
-                  <span className="ex-mlabel">Clé reçue</span>
-                  <span className="ex-val" ref={reg(`${u}-rkey`)}>{st.rkey || '—'}</span>
+                  <span className="ex-mlabel">{t('Clé reçue')}</span>
+                  <span className="ex-val" ref={reg(`${u}-rkey`)}>{st.rkey ? t(st.rkey) : '—'}</span>
                 </div>
               </div>
             </div>
@@ -656,12 +695,12 @@ export default function ExchangePanel({ active }: { active: boolean }) {
               <span className={`ex-dot ex-from-${u}`} />
               {/* le titre suit l'opération en cours */}
               <span key={st.box?.op ?? 'idle'} className="ex-box-name">
-                {st.box?.op === 'encrypt' ? 'Boîte de chiffrement' : st.box?.op === 'decrypt' ? 'Boîte de déchiffrement' : 'Boîte de chiffrement / déchiffrement'} de {UP(u)}
+                {t(st.box?.op === 'encrypt' ? 'Boîte de chiffrement de {u}' : st.box?.op === 'decrypt' ? 'Boîte de déchiffrement de {u}' : 'Boîte de chiffrement / déchiffrement de {u}', { u: UP(u) })}
               </span>
             </div>
             <button
               type="button" className="blur-toggle" onClick={() => upd(u, { blurred: !st.blurred })}
-              aria-label={st.blurred ? 'Déflouter' : 'Flouter'} title={st.blurred ? 'Déflouter' : 'Flouter'}
+              aria-label={st.blurred ? t('Déflouter') : t('Flouter')} title={st.blurred ? t('Déflouter') : t('Flouter')}
             >
               {st.blurred ? <EyeOpen /> : <EyeOff />}
             </button>
@@ -675,7 +714,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
             {st.emerge && (
               <div className="ex-emerge" key={'e' + st.emerge.n}>
                 <div className={'sortie' + (st.emerge.cipher ? ' is-cipher' : '')} ref={reg(`${u}-emerge`)}>
-                  <span className="output-label">{st.emerge.label}</span>
+                  <span className="output-label">{t(st.emerge.label)}</span>
                   <Letters className="result-text result-materialize" text={st.emerge.text} step={st.emerge.step} />
                 </div>
               </div>
@@ -684,7 +723,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
             <div className="demo-content">
               {st.box
                 ? <TraceView key={st.boxN} view={st.box} />
-                : <div className="ex-note">En attente : écris un message puis clique « Chiffrer ».</div>}
+                : <div className="ex-note">{t('En attente : écris un message puis clique « Chiffrer ».')}</div>}
             </div>
           </div>
         </div>
@@ -704,17 +743,17 @@ export default function ExchangePanel({ active }: { active: boolean }) {
           {!keysShown ? (
             <div className="ex-gen">
               <label className="ex-size">
-                <span>Clés RSA</span>
+                <span>{t('Clés RSA')}</span>
                 <select value={bits} disabled={started} onChange={(e) => setBits(Number(e.target.value))}>
                   {SIZES.map((s) => (
-                    <option key={s} value={s}>{s} bits</option>
+                    <option key={s} value={s}>{t('{n} bits', { n: s })}</option>
                   ))}
                 </select>
               </label>
               <button type="button" className="ex-genbtn" onClick={start} disabled={started}>
-                {started ? 'Génération…' : 'Générer les clés'}
+                {started ? t('Génération…') : t('Générer les clés')}
               </button>
-              {genError && <span className="ex-gen-err">{genError}</span>}
+              {genError && <span className="ex-gen-err">{t(genError)}</span>}
             </div>
           ) : null}
         </div>
@@ -730,7 +769,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
       <div className={'panel ex-proto' + (protoOpen ? ' is-open' : '')}>
         <h3 className="sub-title ex-proto-title">
           <button type="button" className="ex-proto-head" aria-expanded={protoOpen} aria-controls="ex-proto-body" onClick={() => setProtoOpen((o) => !o)}>
-            Protocole RSA
+            {t('Protocole RSA')}
             <svg className="ex-proto-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="m6 9 6 6 6-6" />
             </svg>
@@ -741,47 +780,42 @@ export default function ExchangePanel({ active }: { active: boolean }) {
             <div className="ex-proto-content">
               <ol className="ex-steps">
                 <li>
-                  <b>Génération des clés</b>
-                  Deux nombres premiers p et q (test de Miller-Rabin), n = p × q, φ(n) = (p − 1)(q − 1), e = 65537 et
-                  d = e⁻¹ mod φ(n). Clé publique : (e, n). Clé privée : (d, n).
+                  <b>{t('Génération des clés')}</b>
+                  {t('Deux nombres premiers p et q (test de Miller-Rabin), n = p × q, φ(n) = (p − 1)(q − 1), e = 65537 et d = e⁻¹ mod φ(n). Clé publique : (e, n). Clé privée : (d, n).')}
                 </li>
                 <li>
-                  <b>Échange des clés publiques</b>
-                  A et B s'envoient leurs clés publiques. Les clés privées ne quittent jamais leur propriétaire.
+                  <b>{t('Échange des clés publiques')}</b>
+                  {t("A et B s'envoient leurs clés publiques. Les clés privées ne quittent jamais leur propriétaire.")}
                 </li>
                 <li>
-                  <b>Envoi</b>
-                  L'expéditeur chiffre son message (César, Playfair ou Hill), puis enferme l'algo, la clé et le chiffré avec
-                  la clé publique du destinataire : c = m<sup>e</sup> mod n.
+                  <b>{t('Envoi')}</b>
+                  {t("L'expéditeur chiffre son message (César, Playfair ou Hill), puis enferme l'algo, la clé et le chiffré avec la clé publique du destinataire :")} c = m<sup>e</sup> mod n.
                 </li>
                 <li>
-                  <b>Réception</b>
-                  Le destinataire ouvre le coffre avec sa clé privée (m = c<sup>d</sup> mod n), relit l'algo et la clé, puis
-                  déchiffre le message.
+                  <b>{t('Réception')}</b>
+                  {t('Le destinataire ouvre le coffre avec sa clé privée')} (m = c<sup>d</sup> mod n){t(", relit l'algo et la clé, puis déchiffre le message.")}
                 </li>
               </ol>
               <p className="ex-note">
-                Tout est calculé par le backend Python (<code>rsa_crypto.py</code>). C'est le RSA « de manuel », sans
-                remplissage : en pratique, on ajoute un remplissage aléatoire (OAEP) pour qu'un même message ne donne jamais
-                le même chiffré. Pour générer de nouvelles clés, rafraîchis la page.
+                {t('Tout est calculé par le backend Python')} (<code>rsa_crypto.py</code>). {t("C'est le RSA « de manuel », sans remplissage : en pratique, on ajoute un remplissage aléatoire (OAEP) pour qu'un même message ne donne jamais le même chiffré. Pour générer de nouvelles clés, rafraîchis la page.")}
               </p>
               {lastSent && (
                 <p className="ex-note">
-                  Au dernier envoi, quelqu'un qui écoute le canal n'aurait vu passer qu'un coffre verrouillé
-                  ({lastSent.blocks.length} bloc{lastSent.blocks.length > 1 ? 's' : ''}, c₁ = <code>{short(lastSent.blocks[0], 8)}</code>)
-                  et le message chiffré « <code>{clip(lastSent.cipher, 60)}</code> ». Sans la clé privée de {UP(OTHER[lastSent.from])},
-                  impossible de lire l'algo ou la clé.
+                  {t("Au dernier envoi, quelqu'un qui écoute le canal n'aurait vu passer qu'un coffre verrouillé")}{' '}
+                  ({lastSent.blocks.length} {t(plural(lastSent.blocks.length, 'bloc', 'blocs'))}, c₁ = <code>{short(lastSent.blocks[0], 8)}</code>){' '}
+                  {t('et le message chiffré')} {getLang() === 'en' ? '"' : '« '}<code>{clip(lastSent.cipher, 60)}</code>{getLang() === 'en' ? '"' : ' »'}.{' '}
+                  {t("Sans la clé privée de {u}, impossible de lire l'algo ou la clé.", { u: UP(OTHER[lastSent.from]) })}
                 </p>
               )}
               {keys.a && keys.b && (
                 <details className="ex-details">
-                  <summary>Voir les clés complètes de A et B</summary>
+                  <summary>{t('Voir les clés complètes de A et B')}</summary>
                   <div className="ex-keyfull">
                     {(['a', 'b'] as U[]).map((u) => {
                       const k = keys[u]!
                       return (
                         <div key={u} className={`ex-keycard ex-from-${u}`}>
-                          <div className="ex-sec-title">Utilisateur {UP(u)} · {k.bits} bits</div>
+                          <div className="ex-sec-title">{t('Utilisateur {u}', { u: UP(u) })} · {t('{n} bits', { n: k.bits })}</div>
                           {(['p', 'q', 'n', 'phi', 'e', 'd'] as const).map((f) => (
                             <div key={f} className="ex-full">
                               <span className="ex-row-l">{f === 'phi' ? 'φ(n)' : f}</span>
@@ -799,7 +833,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
         </div>
       </div>
 
-      <Chat msgs={chat} cipherView={cipherView} onToggle={() => setCipherView((c) => !c)} />
+      <Chat msgs={chat} cipherView={cipherView} onToggle={() => setCipherView((c) => !c)} onClear={clearChat} />
     </div>
   )
 }

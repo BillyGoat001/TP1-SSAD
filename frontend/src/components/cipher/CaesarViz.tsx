@@ -1,4 +1,7 @@
 import type { CaesarTrace } from '../../types'
+import { t, getLang } from '../../i18n'
+
+const q = (c: string) => (getLang() === 'en' ? `"${c}"` : `« ${c} »`)
 
 interface Props {
   trace: CaesarTrace
@@ -17,8 +20,7 @@ export default function CaesarViz({ trace, index, showResult = false }: Props) {
   return (
     <div className="viz">
       <div className="viz-caption">
-        Décalage effectif : <strong>+{trace.shift}</strong> — chaque lettre du
-        haut est remplacée par celle du bas.
+        {t('Décalage effectif :')} <strong>+{trace.shift}</strong> — {t('chaque lettre du haut est remplacée par celle du bas.')}
       </div>
 
       <div className="alpha-scroll">
@@ -45,7 +47,7 @@ export default function CaesarViz({ trace, index, showResult = false }: Props) {
       )}
       {current && current.type === 'skip' && (
         <div className="focus muted">
-          « {current.char === ' ' ? 'espace' : current.char === '\n' ? 'retour à la ligne' : current.char} » n'est pas une lettre → inchangé
+          {t('{c} n\'est pas une lettre → inchangé', { c: q(current.char === ' ' ? t('espace') : current.char === '\n' ? t('retour à la ligne') : current.char) })}
         </div>
       )}
 

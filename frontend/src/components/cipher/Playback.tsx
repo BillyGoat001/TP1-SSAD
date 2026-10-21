@@ -1,4 +1,5 @@
 // Reusable playback control bar: Reset / Step / Play-Pause + speed slider.
+import { t } from '../../i18n'
 
 interface Props {
   playing: boolean
@@ -16,17 +17,17 @@ export default function Playback({
 }: Props) {
   return (
     <div className="playback">
-      <button className="btn" onClick={reset} title="Revenir au début">⏮ Début</button>
-      <button className="btn" onClick={step} disabled={atEnd} title="Étape suivante">
-        Étape ⏭
+      <button className="btn" onClick={reset} title={t('Revenir au début')}>⏮ {t('Début')}</button>
+      <button className="btn" onClick={step} disabled={atEnd} title={t('Étape suivante')}>
+        {t('Étape')} ⏭
       </button>
       {playing ? (
-        <button className="btn btn-accent" onClick={pause}>⏸ Pause</button>
+        <button className="btn btn-accent" onClick={pause}>⏸ {t('Pause')}</button>
       ) : (
-        <button className="btn btn-accent" onClick={play}>▶ Lecture</button>
+        <button className="btn btn-accent" onClick={play}>▶ {t('Lecture')}</button>
       )}
       <label className="speed">
-        Vitesse
+        {t('Vitesse')}
         <input
           type="range" min={0.5} max={4} step={0.5}
           value={speed}

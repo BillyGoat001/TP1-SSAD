@@ -16,19 +16,22 @@ Run (production, after `npm run build` in ../frontend):
 """
 
 import os
-from typing import Any, List, Optional
+import gc
+import time
+from typing import Any, List, Literal, Optional, Union
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 import encryption as en
 import traces
 import passwords as pw
 import integrity
 import rsa_crypto as rsa
+import storage
 
 app = FastAPI(title="TP Security API")
 
@@ -52,38 +55,47 @@ class CipherRequest(BaseModel):
     direction: str = "right"              # caesar
     key: Optional[str] = None             # playfair
     matrix: Optional[List[List[int]]] = None  # hill
+    # mise en forme (déchiffrement) : masque des espaces + positions des X ajoutés
+    layout: Optional[List[List[Any]]] = None
+    fillers: Optional[List[int]] = None
+    jmap: Optional[List[int]] = None       # Playfair : positions des J d'origine (J→I)
+    cases: Optional[List[int]] = None      # positions des lettres écrites en minuscules
 
 
 class WarningRequest(BaseModel):
     algo: str
     shift: Optional[int] = None
     matrix: Optional[List[List[int]]] = None
+    key: Optional[str] = None
+
+
+class Rules(BaseModel):
+    require_lower: bool = False
+    require_upper: bool = False
+    require_digit: bool = False
+    require_symbol: bool = False
+    min_length: Optional[int] = None
 
 
 class BruteRequest(BaseModel):
     case: str
     target: str
     length: Optional[int] = None
+    limit: Optional[int] = None         # limite de tentatives (verrouillage)
+    rules: Optional[Rules] = None       # politique (cas complexe)
+    know_composition: bool = True       # l'attaquant connaît-il la composition ?
 
 
 class DictRequest(BaseModel):
     target: str
-    words: Optional[List[str]] = None
+    limit: Optional[int] = None
 
 
-class ProtectRequest(BaseModel):
-    password: str
-    require_lower: bool = False
-    require_upper: bool = False
-    require_digit: bool = False
-    require_symbol: bool = False
-    min_length: Optional[int] = None
-    limit_attempts: bool = False
-    slow_hash: bool = False
-
-
-class HashRequest(BaseModel):
-    password: str
+class ValidateRequest(BaseModel):
+    case: str
+    target: str
+    length: Optional[int] = None
+    rules: Optional[Rules] = None
 
 
 class SignRequest(BaseModel):
@@ -126,6 +138,58 @@ class OpenRequest(BaseModel):
     blocks: List[str]
 
 
+# --- fichiers de stockage : historique des chiffrements + conversation A ↔ B ---
+class HistoryEntryIn(BaseModel):
+    op: Literal["encrypt", "decrypt"]
+    clear: str = Field(max_length=5000)        # message clair
+    cipher: str = Field(max_length=5000)       # message chiffré
+    algo: Literal["caesar", "playfair", "hill"]
+    algoLabel: str = Field(max_length=40)
+    key: str = Field(max_length=2000)          # la clé, en texte lisible
+    timeUs: Optional[float] = None             # temps de calcul (µs)
+
+
+class PwHistoryIn(BaseModel):
+    attack: Literal["brute", "dict"]                       # type d'attaque
+    case: Literal["binaire", "numerique", "complexe"]
+    password: str = Field(max_length=200)                   # le mot de passe visé
+    protection: str = Field(max_length=300)                 # résumé : « Aucune », « 5 tentatives max »…
+    result: Literal["found", "blocked", "resist", "interrupted"]
+    tries: float = Field(ge=0, allow_inf_nan=False)         # essais effectués
+    timeSec: float = Field(ge=0, allow_inf_nan=False)       # durée de l'attaque (secondes, vitesse de l'attaquant)
+
+
+class ChatParams(BaseModel):
+    algo: Literal["caesar", "playfair", "hill"]
+    shift: Optional[Union[int, str]] = None   # un très grand décalage arrive en texte
+    direction: Optional[Literal["right", "left"]] = None
+    key: Optional[str] = Field(default=None, max_length=2000)
+    matrix: Optional[List[List[Union[int, str]]]] = Field(default=None, max_length=5)
+
+    @field_validator("shift")
+    @classmethod
+    def _shift_court(cls, v):
+        if isinstance(v, str) and len(v) > 200:
+            raise ValueError("décalage trop long")
+        return v
+
+    @field_validator("matrix")
+    @classmethod
+    def _matrice_bornee(cls, v):
+        if v is not None and any(len(row) > 5 or any(isinstance(c, str) and len(c) > 200 for c in row) for row in v):
+            raise ValueError("matrice trop grande")
+        return v
+
+
+class ChatMessageIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    id: int
+    sender: Literal["a", "b"] = Field(alias="from")   # « from » est un mot réservé de Python
+    plain: str = Field(max_length=5000)
+    cipher: str = Field(max_length=20000)
+    params: ChatParams
+
+
 def _ok(**data: Any) -> JSONResponse:
     return JSONResponse({"ok": True, **data})
 
@@ -152,28 +216,118 @@ def _err(message: str) -> JSONResponse:
 
 
 # ---------------------------------------------------------- ciphers (P1) ----
+def _bench_us(fn, *args):
+    """Temps de calcul de l'algorithme SEUL (sans la trace d'animation, sans le
+    réseau), en microsecondes.
+
+    Un calcul de quelques µs est trop court pour être chronométré en un seul appel :
+    le moindre événement de la machine (autre programme, cache du processeur,
+    ramasse-miettes de Python) pèse autant que le calcul lui-même. On procède donc
+    comme `timeit` :
+      - on cale un nombre d'appels `n` qui dure environ 1 ms, et on mesure UNE
+        fenêtre de `n` appels d'affilée (temps moyen d'un appel) ;
+      - on répète des dizaines de fenêtres (dans un budget de ~60 ms) ;
+      - on garde la plus rapide : c'est celle où la machine a le moins gêné
+        l'algorithme, donc la plus proche de son vrai coût.
+    Le ramasse-miettes est suspendu pendant la mesure."""
+    window_ns, budget_ns, max_windows = 1_000_000, 60_000_000, 80
+    gc_was_on = gc.isenabled()
+    gc.disable()
+    try:
+        start = time.perf_counter_ns()
+        n = 1
+        while True:                                   # calibrage de la fenêtre
+            t0 = time.perf_counter_ns()
+            for _ in range(n):
+                fn(*args)
+            dt = time.perf_counter_ns() - t0
+            if dt >= window_ns or n >= 1_000_000:
+                break
+            n *= 4 if dt < window_ns / 8 else 2
+        best = dt / n
+        windows = 1
+        while windows < max_windows and time.perf_counter_ns() - start < budget_ns:
+            t0 = time.perf_counter_ns()
+            for _ in range(n):
+                fn(*args)
+            best = min(best, (time.perf_counter_ns() - t0) / n)
+            windows += 1
+        return round(best / 1000, 2)
+    finally:
+        if gc_was_on:
+            gc.enable()
+
+
 @app.post("/api/cipher")
 def cipher(req: CipherRequest):
+    """Chiffre/déchiffre, en sortant un bloc de lettres (sans espaces) et en
+    gérant la mise en forme à part :
+      - chiffrement : on sépare les espaces (layout) avant de chiffrer les
+        lettres, et on renvoie layout + positions des X ajoutés (fillers) ;
+      - déchiffrement : si on reçoit layout + fillers, on retire les X puis on
+        remet les espaces, pour retrouver le message d'origine."""
     try:
+        encrypting = req.operation == "encrypt"
+        # au chiffrement, on retire les non-lettres AVANT de chiffrer (le bloc
+        # chiffré est alors « en un seul morceau », comme Playfair et Hill)
+        if encrypting:
+            letters, layout = en.split_layout(req.message)
+            cases = en.lower_positions(letters)   # où étaient les minuscules
+            text = en.to_upper(letters)           # on chiffre en majuscules
+        else:
+            layout, text = None, req.message
+
+        fillers = []
+        jmap = []
         if req.algo == "caesar":
             if req.shift is None:
                 return _err("Indique un décalage (un entier positif).")
-            trace = traces.caesar_trace(req.message, req.shift, req.direction, req.operation)
+            trace = traces.caesar_trace(text, req.shift, req.direction, req.operation)
             warning = en.caesar_weak_key(req.shift)
         elif req.algo == "playfair":
             if not req.key or not req.key.strip():
                 return _err("Indique une clé (des lettres) avant de lancer.")
-            trace = traces.playfair_trace(req.message, req.key, req.operation)
-            warning = None
+            trace = traces.playfair_trace(text, req.key, req.operation)
+            warning = en.playfair_weak_key(req.key)
+            if encrypting:
+                fillers = en.playfair_fillers(en._playfair_clean(text))
+                jmap = en.playfair_jmap(text)   # où étaient les J (fusionnés en I)
         elif req.algo == "hill":
             if req.matrix is None:
                 return _err("Remplis la matrice avant de lancer.")
             matrix = en.validate_matrix(req.matrix)
-            trace = traces.hill_trace(req.message, matrix, req.operation)
+            trace = traces.hill_trace(text, matrix, req.operation)
             warning = en.hill_weak_key(matrix)
+            if encrypting:
+                fillers = en.hill_fillers(len(en._hill_clean(text)), len(matrix))
         else:
             return _err(f"Algorithme inconnu « {req.algo} ».")
-        return _ok(result=trace["result"], trace=_js_safe(trace), warning=warning)
+
+        result = trace["result"]
+        # temps de calcul de l'algorithme (None si la mesure n'est pas possible)
+        try:
+            if req.algo == "caesar":
+                fn = en.caesar_encrypt if encrypting else en.caesar_decrypt
+                time_us = _bench_us(fn, text, req.shift, req.direction)
+            elif req.algo == "playfair":
+                fn = en.playfair_encrypt if encrypting else en.playfair_decrypt
+                time_us = _bench_us(fn, text, req.key)
+            else:
+                fn = en.hill_encrypt if encrypting else en.hill_decrypt
+                time_us = _bench_us(fn, text, matrix)
+        except Exception:
+            time_us = None
+        if encrypting:
+            # le bloc chiffré + les métadonnées pour retrouver la forme au déchiffrement
+            return _ok(result=result, trace=_js_safe(trace), warning=warning,
+                       layout=layout, fillers=fillers, jmap=jmap, cases=cases, time_us=time_us)
+        # déchiffrement : on remet la forme d'origine si on a les métadonnées
+        if req.layout is not None:
+            cleaned = en.strip_fillers(result, req.fillers or [])
+            cleaned = en.restore_j(cleaned, req.jmap or [])   # I→J aux positions mémorisées
+            cleaned = en.restore_case(cleaned, req.cases or [])   # minuscules aux positions mémorisées
+            result = en.merge_layout(cleaned, req.layout)
+        return _ok(result=result, trace=_js_safe(trace), warning=warning, time_us=time_us)
     except ValueError as e:
         return _err(str(e))
 
@@ -187,6 +341,8 @@ def cipher_warning(req: WarningRequest):
             if not req.matrix:
                 return _ok(warning=None)
             return _ok(warning=en.hill_weak_key(en.validate_matrix(req.matrix)))
+        if req.algo == "playfair":
+            return _ok(warning=en.playfair_weak_key(req.key) if req.key and req.key.strip() else None)
         return _ok(warning=None)
     except ValueError as e:
         return _ok(warning=str(e))
@@ -260,46 +416,43 @@ def password_cases():
         },
         fullCharset=pw.FULL_CHARSET,
         classSizes=pw.CLASS_SIZES,
-        dictionarySize=len(pw.DEFAULT_DICTIONARY),
-        assumptions={
-            "fastRate": pw.FAST_RATE,
-            "slowHashRate": pw.SLOW_HASH_RATE,
-            "lockoutAttempts": pw.LOCKOUT_ATTEMPTS,
-            "lockoutWindow": pw.LOCKOUT_WINDOW,
-            "maxAttempts": pw.MAX_ATTEMPTS,
-        },
+        dictionarySize=pw.dictionary_size(),
+        table=pw.speed_table(),
+        assumptions=pw.assumptions(),
     )
+
+
+def _rules_dict(rules):
+    if rules is None:
+        return None
+    return {
+        "require_lower": rules.require_lower,
+        "require_upper": rules.require_upper,
+        "require_digit": rules.require_digit,
+        "require_symbol": rules.require_symbol,
+        "min_length": rules.min_length,
+    }
+
+
+@app.post("/api/passwords/validate")
+def password_validate(req: ValidateRequest):
+    try:
+        return _ok(**pw.validate(req.target, req.case, req.length, _rules_dict(req.rules)))
+    except ValueError as e:
+        return _err(str(e))
 
 
 @app.post("/api/passwords/bruteforce")
 def password_bruteforce(req: BruteRequest):
     try:
-        return _ok(**pw.brute_force(req.target, req.case, req.length))
+        return _ok(**pw.brute_force(req.target, req.case, req.length, req.limit, _rules_dict(req.rules), req.know_composition))
     except ValueError as e:
         return _err(str(e))
 
 
 @app.post("/api/passwords/dictionary")
 def password_dictionary(req: DictRequest):
-    return _ok(**pw.dictionary_attack(req.target, req.words))
-
-
-@app.post("/api/passwords/protect")
-def password_protect(req: ProtectRequest):
-    return _ok(**pw.analyze(req.password, {
-        "require_lower": req.require_lower,
-        "require_upper": req.require_upper,
-        "require_digit": req.require_digit,
-        "require_symbol": req.require_symbol,
-        "min_length": req.min_length,
-        "limit_attempts": req.limit_attempts,
-        "slow_hash": req.slow_hash,
-    }))
-
-
-@app.post("/api/passwords/hash")
-def password_hash(req: HashRequest):
-    return _ok(**pw.hash_password(req.password))
+    return _ok(**pw.dictionary_attack(req.target, req.limit))
 
 
 # -------------------------------------------------------- integrity (P4) ----
@@ -316,6 +469,65 @@ def integrity_verify(req: VerifyRequest):
 @app.post("/api/integrity/demo")
 def integrity_demo(req: IntegrityDemoRequest):
     return _ok(**integrity.demo(req.key, req.original, req.received))
+
+
+# ------------------------------------------ fichiers : historique + conversation ----
+# Voir storage.py : deux fichiers JSON dans backend/data/.
+@app.get("/api/history")
+def history_list():
+    return _ok(entries=storage.history_list())            # la plus récente en premier
+
+
+@app.post("/api/history")
+def history_add(entry: HistoryEntryIn):
+    return _ok(entry=storage.history_add(entry.model_dump()))
+
+
+@app.delete("/api/history/{entry_id}")
+def history_delete(entry_id: int):
+    """Supprime UNE ligne de l'historique."""
+    return _ok(deleted=storage.history_delete(entry_id))
+
+
+@app.delete("/api/history")
+def history_clear():
+    return _ok(deleted=storage.history_clear())
+
+
+@app.get("/api/pw-history")
+def pw_history_list():
+    return _ok(entries=storage.pw_history_list())
+
+
+@app.post("/api/pw-history")
+def pw_history_add(entry: PwHistoryIn):
+    return _ok(entry=storage.pw_history_add(entry.model_dump()))
+
+
+@app.delete("/api/pw-history/{entry_id}")
+def pw_history_delete(entry_id: int):
+    return _ok(deleted=storage.pw_history_delete(entry_id))
+
+
+@app.delete("/api/pw-history")
+def pw_history_clear():
+    return _ok(deleted=storage.pw_history_clear())
+
+
+@app.get("/api/conversation")
+def conversation_list():
+    return _ok(messages=storage.conversation_list())
+
+
+@app.post("/api/conversation")
+def conversation_add(msg: ChatMessageIn):
+    saved = storage.conversation_add(msg.model_dump(by_alias=True, exclude_none=True))
+    return _ok(message=saved, duplicate=saved is None)
+
+
+@app.delete("/api/conversation")
+def conversation_clear():
+    return _ok(deleted=storage.conversation_clear())
 
 
 # --------------------------------------------- serve the built frontend ----

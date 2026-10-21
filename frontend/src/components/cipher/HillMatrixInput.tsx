@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { t } from '../../i18n'
 
 interface Props {
   matrix: number[][]
@@ -71,7 +72,7 @@ export default function HillMatrixInput({ matrix, cells: initialCells, fit = fal
   return (
     <div className="hill-input">
       <div className="size-row">
-        <span className="field-label">Taille</span>
+        <span className="field-label">{t('Taille')}</span>
         {SIZES.map((size) => (
           <button key={size} type="button" className={'seg' + (n === size ? ' is-on' : '')} onClick={() => resize(size)}>
             {size}×{size}
@@ -92,7 +93,7 @@ export default function HillMatrixInput({ matrix, cells: initialCells, fit = fal
                 value={v}
                 style={{ width: cellWidth } as CSSProperties}
                 onChange={(e) => setCell(r, c, e.target.value)}
-                aria-label={`ligne ${r + 1}, colonne ${c + 1}`}
+                aria-label={t('ligne {r}, colonne {c}', { r: r + 1, c: c + 1 })}
               />
             )),
           )}

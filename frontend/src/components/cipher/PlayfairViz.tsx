@@ -1,4 +1,5 @@
 import type { PlayfairTrace } from '../../types'
+import { t, _t } from '../../i18n'
 
 interface Props {
   trace: PlayfairTrace
@@ -8,9 +9,9 @@ interface Props {
 }
 
 const RULE_LABEL: Record<string, string> = {
-  row: 'même ligne → lettre à droite',
-  col: 'même colonne → lettre en dessous',
-  rect: 'rectangle → échange des colonnes',
+  row: _t('même ligne → lettre à droite'),
+  col: _t('même colonne → lettre en dessous'),
+  rect: _t('rectangle → échange des colonnes'),
 }
 
 // 5x5 grid on the left; the prepared message, digrams and current step on the
@@ -26,7 +27,7 @@ export default function PlayfairViz({ trace, index, original, showResult = false
   return (
     <div className="viz split-layout">
       <div className="split-main">
-        <div className="viz-caption">Grille 5×5 construite à partir de la clé.</div>
+        <div className="viz-caption">{t('Grille 5×5 construite à partir de la clé.')}</div>
         <div className="pf-grid">
           {trace.grid.map((row, r) =>
             row.map((ch, c) => {
@@ -54,13 +55,13 @@ export default function PlayfairViz({ trace, index, original, showResult = false
 
       <div className="split-side">
         <div className="prep">
-          <span className="prep-label">Message préparé</span>
+          <span className="prep-label">{t('Message préparé')}</span>
           <div className="prep-flow">
             <code className="prep-orig">{cleanOriginal}</code>
             <span className="prep-arrow">→</span>
             <code className="prep-digrams">{prepared || '—'}</code>
           </div>
-          <span className="prep-note">J est remplacé par I, et un X complète si besoin.</span>
+          <span className="prep-note">{t('J est remplacé par I, et un X complète si besoin.')}</span>
         </div>
 
         {showResult ? (
@@ -94,7 +95,7 @@ export default function PlayfairViz({ trace, index, original, showResult = false
             <span className="focus-in">{current.a}{current.b}</span>
             <span className="focus-op">→</span>
             <span className="focus-out">{current.outA}{current.outB}</span>
-            <span className="rule-tag">{RULE_LABEL[current.rule]}</span>
+            <span className="rule-tag">{t(RULE_LABEL[current.rule])}</span>
           </div>
         )}
       </div>

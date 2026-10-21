@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { HillTrace } from '../../types'
+import { t } from '../../i18n'
 
 interface Props {
   trace: HillTrace
@@ -31,7 +32,7 @@ export default function HillViz({ trace, index, original, showResult = false }: 
       <div className="split-layout">
         <div className="split-main">
           <div className="viz-caption">
-            {trace.n}×{trace.n} — matrice clé × bloc de {trace.n} lettres (mod 26).
+            {t('{n}×{n} — matrice clé × bloc de {n} lettres (mod 26).', { n: trace.n })}
           </div>
           <div className="hill-eq">
             <div className="hill-matrix" style={{ '--n': trace.n } as CSSProperties}>
@@ -60,18 +61,18 @@ export default function HillViz({ trace, index, original, showResult = false }: 
 
         <div className="split-side">
           <div className="prep">
-            <span className="prep-label">Message préparé</span>
+            <span className="prep-label">{t('Message préparé')}</span>
             <div className="prep-flow">
               <code className="prep-orig">{cleanOriginal}</code>
               <span className="prep-arrow">→</span>
               <code className="prep-digrams">{trace.cleaned}</code>
             </div>
-            <span className="prep-note">Un X complète le dernier bloc si besoin.</span>
+            <span className="prep-note">{t('Un X complète le dernier bloc si besoin.')}</span>
           </div>
 
           {current && (
             <div className="hill-calc">
-              <span className="focus-in">ligne {current.rowIndex + 1}</span>
+              <span className="focus-in">{t('ligne {n}', { n: current.rowIndex + 1 })}</span>
               <span className="calc-terms">
                 {current.terms.map(([m, v], i) => (
                   <span key={i}>
@@ -105,7 +106,7 @@ export default function HillViz({ trace, index, original, showResult = false }: 
       )}
 
       {/* A = 0 … Z = 25 reference */}
-      <div className="hill-alpha-caption">Correspondance lettre → nombre (A = 0 … Z = 25)</div>
+      <div className="hill-alpha-caption">{t('Correspondance lettre → nombre (A = 0 … Z = 25)')}</div>
       <div className="hill-alphabet-scroll">
         <div className="hill-alphabet">
           {Array.from({ length: 26 }, (_, i) => (

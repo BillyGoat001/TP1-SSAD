@@ -55,6 +55,17 @@ def _playfair_matrix(key):
     return [seen[i * 5:(i + 1) * 5] for i in range(5)]
 
 
+def playfair_weak_key(key):
+    """Avertissement si la clé laisse la grille de l'alphabet (A B C D E / F G H I K / …) :
+    c'est la clé vide, ou un début d'alphabet (A, AB, ABC, ABCDE…), le J comptant pour I."""
+    grid = "".join("".join(row) for row in _playfair_matrix(key))
+    if grid == PLAYFAIR_ALPHABET:
+        return ("Cette clé laisse la grille de l'alphabet (A B C D E / F G H I K…) : "
+                "c'est la première grille qu'un attaquant essaie. Sur une même ligne, "
+                "une lettre est simplement décalée d'une place, comme un César de clé 1.")
+    return None
+
+
 def _playfair_pos(matrix, ch):
     for r in range(5):
         for c in range(5):
@@ -230,4 +241,128 @@ def hill_weak_key(matrix):
     if off_diagonal_zero:
         return ("Matrice diagonale : chaque lettre serait chiffrée seule, ce qui "
                 "revient à une substitution monoalphabétique très faible.")
+    if _is_permutation_matrix(matrix):
+        return ("Matrice de permutation : les lettres du message sont seulement "
+                "déplacées dans chaque bloc, pas remplacées. On reconnaît tout de "
+                "suite les mêmes lettres dans un autre ordre.")
     return None
+
+
+def _is_permutation_matrix(matrix):
+    """Un seul 1 par ligne et par colonne, des 0 partout ailleurs (modulo 26)."""
+    m = [[v % 26 for v in row] for row in matrix]
+    n = len(m)
+    for rows in (m, [list(col) for col in zip(*m)]):
+        for row in rows:
+            if sorted(row) != [0] * (n - 1) + [1]:
+                return False
+    return True
+
+
+# -------------------------------- mise en forme : espaces & bourrage (X) ------
+# Les trois algorithmes ne travaillent que sur des lettres. Pour que le message
+# chiffré sorte « en un seul morceau » (sans espaces) ET que le déchiffrement
+# retrouve les espaces, on range à côté du bloc chiffré deux métadonnées :
+#   - layout  : les non-lettres (espaces, ponctuation...) et leur position ;
+#   - fillers : les positions des lettres AJOUTÉES par l'algo (les X de Playfair
+#               et de Hill), pour pouvoir les retirer au déchiffrement ;
+#   - cases   : les positions des lettres écrites en MINUSCULES. On chiffre en
+#               majuscules (les algos ne changent pas) et on remet les minuscules
+#               aux mêmes positions au déchiffrement.
+# César n'ajoute rien : fillers y est toujours vide.
+
+def split_layout(message):
+    """(lettres, layout). lettres = uniquement les caractères alphabétiques ;
+    layout = [[index_dans_l_original, caractère], ...] pour chaque non-lettre."""
+    letters, layout = [], []
+    for i, ch in enumerate(message):
+        if ch.isalpha():
+            letters.append(ch)
+        else:
+            layout.append([i, ch])
+    return "".join(letters), layout
+
+
+def merge_layout(letters, layout):
+    """Réinsère les non-lettres à leurs positions d'origine (layout dans l'ordre)."""
+    chars = list(letters)
+    for item in layout:
+        i, ch = item[0], item[1]
+        chars.insert(i if i <= len(chars) else len(chars), ch)
+    return "".join(chars)
+
+
+def strip_fillers(letters, fillers):
+    """Retire les lettres ajoutées par l'algo (X de Playfair/Hill), repérées par
+    leur position dans le flux de lettres."""
+    drop = set(fillers or [])
+    return "".join(c for i, c in enumerate(letters) if i not in drop)
+
+
+def hill_fillers(letter_count, n):
+    """Positions des X de bourrage ajoutés par Hill (fin du dernier bloc)."""
+    padded = letter_count
+    while padded % n != 0:
+        padded += 1
+    return list(range(letter_count, padded))
+
+
+def playfair_fillers(clean):
+    """Positions, dans le flux de lettres, des X insérés par Playfair (entre deux
+    lettres identiques ou pour compléter un digramme final). Reproduit exactement
+    la logique de _playfair_digrams, mais ne note que les positions."""
+    fillers = []
+    i = 0
+    pair = 0
+    while i < len(clean):
+        b = clean[i + 1] if i + 1 < len(clean) else None
+        if b is None or clean[i] == b:
+            fillers.append(2 * pair + 1)
+            i += 1
+        else:
+            i += 2
+        pair += 1
+    return fillers
+
+
+def playfair_jmap(letters):
+    """Positions des lettres J d'origine dans le flux de lettres. Playfair fusionne
+    J avec I (ils partagent une case) ; on mémorise où étaient les J pour pouvoir
+    les restituer au déchiffrement — exactement comme le layout pour les espaces."""
+    return [i for i, ch in enumerate(letters) if ch.upper() == "J"]
+
+
+def lower_positions(letters):
+    """Positions (dans le flux de lettres) des minuscules a-z : la « casse » à mémoriser."""
+    return [i for i, ch in enumerate(letters) if "a" <= ch <= "z"]
+
+
+def to_upper(letters):
+    """Passe les lettres a-z en majuscules, une pour une (la longueur ne change jamais,
+    donc les positions mémorisées restent valables)."""
+    return "".join(ch.upper() if "a" <= ch <= "z" else ch for ch in letters)
+
+
+def restore_case(letters, cases):
+    """Inverse de to_upper : remet en minuscules les lettres aux positions mémorisées
+    (cases). À appliquer après strip_fillers et restore_j, avant merge_layout."""
+    if not cases:
+        return letters
+    chars = list(letters)
+    for i in cases:
+        if 0 <= i < len(chars) and "A" <= chars[i] <= "Z":
+            chars[i] = chars[i].lower()
+    return "".join(chars)
+
+
+def restore_j(letters, jmap):
+    """Inverse de la fusion J→I : reconvertit en J les I situés aux positions
+    mémorisées (jmap). Les positions sont celles du flux de lettres SANS les X
+    ajoutés, donc à appliquer après strip_fillers et avant merge_layout."""
+    if not jmap:
+        return letters
+    chars = list(letters)
+    for i in jmap:
+        if 0 <= i < len(chars) and chars[i].upper() == "I":
+            chars[i] = "J"
+    return "".join(chars)

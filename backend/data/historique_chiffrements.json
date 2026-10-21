@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "next_id": 52,
+  "entries": [
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "RQUENVCV",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 13.04,
+      "id": 31,
+      "at": "2026-10-20T18:49:34+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "RQUENVCV",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 10.49,
+      "id": 32,
+      "at": "2026-10-20T18:49:38+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "RQUENVCV",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 11.12,
+      "id": 33,
+      "at": "2026-10-20T18:49:40+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "RQUENVCV",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 12.08,
+      "id": 34,
+      "at": "2026-10-20T18:49:41+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "RQUENVCV",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 11.25,
+      "id": 35,
+      "at": "2026-10-20T18:49:43+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "RQUENVCV",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 10.32,
+      "id": 36,
+      "at": "2026-10-20T18:49:46+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR BONJOUR",
+      "cipher": "RQUENVBCQORNVI",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 15.26,
+      "id": 37,
+      "at": "2026-10-20T18:53:50+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR BONJOUR",
+      "cipher": "RQUENVBCQORNVI",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 16.96,
+      "id": 38,
+      "at": "2026-10-20T18:53:53+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR BONJOUR",
+      "cipher": "RQUENVBCQORNVI",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 16.58,
+      "id": 39,
+      "at": "2026-10-20T18:53:55+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR BONJOUR",
+      "cipher": "RQUENVBCQORNVI",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 16.88,
+      "id": 40,
+      "at": "2026-10-20T18:53:57+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR BONJOUR",
+      "cipher": "RQUENVBCQORNVI",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 16.87,
+      "id": 41,
+      "at": "2026-10-20T18:53:58+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR BONJOUR",
+      "cipher": "RQUENVBCQORNVI",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 17.24,
+      "id": 42,
+      "at": "2026-10-20T18:54:00+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "C",
+      "cipher": "KY",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 7.13,
+      "id": 43,
+      "at": "2026-10-20T19:05:05+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "ERQMRXU",
+      "algo": "caesar",
+      "algoLabel": "César",
+      "key": "3 (droite)",
+      "timeUs": 1.47,
+      "id": 44,
+      "at": "2026-10-20T20:23:55+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "RQUENVCV",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "PLAYFAIR",
+      "timeUs": 11.42,
+      "id": 45,
+      "at": "2026-10-20T20:24:51+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "ABC",
+      "cipher": "BCHC",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "ABC",
+      "timeUs": 7.57,
+      "id": 46,
+      "at": "2026-10-21T10:05:23+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "ABCD",
+      "cipher": "BCDE",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "ABCD",
+      "timeUs": 8.01,
+      "id": 47,
+      "at": "2026-10-21T10:05:30+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "ABCD",
+      "cipher": "BCDE",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "A",
+      "timeUs": 7.86,
+      "id": 48,
+      "at": "2026-10-21T10:05:50+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "JE SUIS\n",
+      "cipher": "KDTQHT",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "A",
+      "timeUs": 11.8,
+      "id": 49,
+      "at": "2026-10-21T10:06:10+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "COUCOU",
+      "cipher": "DNSEPT",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "A",
+      "timeUs": 10.36,
+      "id": 50,
+      "at": "2026-10-21T10:34:06+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "ELLE",
+      "cipher": "APPA",
+      "algo": "playfair",
+      "algoLabel": "Playfair",
+      "key": "A",
+      "timeUs": 7.25,
+      "id": 51,
+      "at": "2026-10-21T10:34:19+00:00"
+    }
+  ]
+}

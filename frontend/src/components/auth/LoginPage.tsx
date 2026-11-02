@@ -1,8 +1,8 @@
-// La page de connexion : identifiant + mot de passe, puis un defi anti-robot (fenetre
-// CaptchaModal). Le serveur verifie tout ; cette page ne decide jamais de rien.
-// La carte se retourne (lien discret en bas) : au verso, l'inscription, protegee par le
-// meme defi anti-robot. Le serveur verifie aussi les regles du mot de passe ; la liste
-// de controle affichee ici sert seulement a guider la saisie.
+// La page de connexion : identifiant + mot de passe, puis un défi anti-robot (fenêtre
+// CaptchaModal). Le serveur vérifie tout ; cette page ne décide jamais de rien.
+// La carte se retourne (lien discret en bas) : au verso, l'inscription, protégée par le
+// même défi anti-robot. Le serveur vérifie aussi les règles du mot de passe ; la liste
+// de contrôle affichée ici sert seulement à guider la saisie.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api } from '../../api'
 import type { LoginResult } from '../../types'
@@ -25,7 +25,7 @@ const Flip = () => (
   </svg>
 )
 
-// Les regles du mot de passe (les memes que cote serveur, backend/auth.py)
+// Les règles du mot de passe (les mêmes que côté serveur, backend/auth.py)
 const RULES: { label: string; test: (p: string) => boolean }[] = [
   { label: _t('8 caractères minimum'), test: (p) => p.length >= 8 },
   { label: _t('Une majuscule'), test: (p) => /[A-Z]/.test(p) },
@@ -51,7 +51,7 @@ const BLOCKED = _t('Compte bloqué après 4 mots de passe erronés. Débloque-le
 
 export default function LoginPage({ onSuccess, actions, configured }: {
   onSuccess: (user: string) => void
-  actions: ReactNode            // le selecteur de langue et le bouton de theme
+  actions: ReactNode            // le sélecteur de langue et le bouton de thème
   configured: boolean
 }) {
   const [mode, setMode] = useState<Mode>('login')
@@ -76,7 +76,6 @@ export default function LoginPage({ onSuccess, actions, configured }: {
   const [modal, setModal] = useState<Mode | null>(null)
   const [phase, setPhase] = useState<'form' | 'open' | 'leaving'>('form')
   const [flash, setFlash] = useState(false)
-  const [lockLeft, setLockLeft] = useState(0)
   const [welcome, setWelcome] = useState('')
   const root = useRef<HTMLDivElement>(null)
   const front = useRef<HTMLElement>(null)
@@ -89,7 +88,7 @@ export default function LoginPage({ onSuccess, actions, configured }: {
   const raf = useRef(0)
 
   // la page garde le projecteur sous le curseur, et compte les gestes (le serveur attend
-  // qu'un humain ait bouge la souris ou tape au clavier avant d'accepter une connexion)
+  // qu'un humain ait bougé la souris ou tapé au clavier avant d'accepter une connexion)
   const onPointerMove = (e: React.PointerEvent) => {
     events.current++
     const { clientX: x, clientY: y } = e
@@ -101,19 +100,12 @@ export default function LoginPage({ onSuccess, actions, configured }: {
   }
   useEffect(() => () => cancelAnimationFrame(raf.current), [])
 
-  // la face cachee de la carte ne recoit ni clic ni focus clavier
+  // la face cachée de la carte ne reçoit ni clic ni focus clavier
   useEffect(() => {
     const setInert = (el: HTMLElement | null, v: boolean) => { if (el) (el as HTMLElement & { inert: boolean }).inert = v }
     setInert(front.current, mode !== 'login')
     setInert(back.current, mode !== 'register')
   }, [mode])
-
-  // decompte d'un verrouillage (trop d'echecs depuis cette adresse)
-  useEffect(() => {
-    if (lockLeft <= 0) return
-    const id = setInterval(() => setLockLeft((n) => Math.max(0, n - 1)), 1000)
-    return () => clearInterval(id)
-  }, [lockLeft > 0])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const typed = username.trim().toLowerCase()
   const isBlocked = blockedFor !== null && blockedFor === typed
@@ -141,7 +133,6 @@ export default function LoginPage({ onSuccess, actions, configured }: {
       setTimeout(() => onSuccess(r.user ?? username.trim()), 2050)
       return
     }
-    if (r.error === 'locked') setLockLeft(r.retry_after ?? 15)
     if (r.error === 'blocked') {
       setBlockedFor(typed); setAttempts(null); setMessage(null)
       setPassword('')
@@ -161,7 +152,7 @@ export default function LoginPage({ onSuccess, actions, configured }: {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (lockLeft > 0 || busy || isBlocked) return
+    if (busy || isBlocked) return
     const next: { u?: string; p?: string } = {}
     if (!username.trim()) next.u = _t('Renseigne ton identifiant.')
     if (!password) next.p = _t('Renseigne ton mot de passe.')
@@ -175,7 +166,7 @@ export default function LoginPage({ onSuccess, actions, configured }: {
 
   const doneReg = (r: LoginResult) => {
     setModal(null)
-    if (r.ok) {                                   // compte cree : retour a la connexion, identifiant prerempli
+    if (r.ok) {                                   // compte créé : retour à la connexion, identifiant prérempli
       setUsername(r.user ?? regUser.trim()); setPassword('')
       setRegUser(''); setRegPw(''); setRegPw2(''); setRegErrs({}); setRegMsg(null); setShowRegPw(false)
       setMessage(null); setAttempts(null); setErrs({})
@@ -184,7 +175,6 @@ export default function LoginPage({ onSuccess, actions, configured }: {
       setTimeout(() => pwRef.current?.focus(), 450)
       return
     }
-    if (r.error === 'locked') setLockLeft(r.retry_after ?? 15)
     if (r.error === 'exists' || r.error === 'username') setRegErrs({ u: r.message })
     else if (r.error === 'policy') setRegErrs({ p: r.message })
     else setRegMsg(r.message ?? _t('Inscription impossible.'))
@@ -192,7 +182,7 @@ export default function LoginPage({ onSuccess, actions, configured }: {
 
   const onRegister = (e: React.FormEvent) => {
     e.preventDefault()
-    if (lockLeft > 0 || busy) return
+    if (busy) return
     const next: RegErrs = {}
     if (!/^[A-Za-z0-9._@-]{3,40}$/.test(regUser.trim())) next.u = _t('Identifiant : 3 à 40 caractères (lettres, chiffres, . _ @ -).')
     const problem = passwordProblem(regPw)
@@ -203,8 +193,7 @@ export default function LoginPage({ onSuccess, actions, configured }: {
   }
 
   const lockState: LockState = phase !== 'form' ? 'open' : flash ? 'error' : modal === 'login' ? 'checking' : 'idle'
-  const lockText = lockLeft > 0 ? t('Trop de tentatives. Réessaie dans {n} s.', { n: lockLeft }) : null
-  const shownMessage = lockText ?? (isBlocked ? t(BLOCKED) : message ? t(message) : null)
+  const shownMessage = isBlocked ? t(BLOCKED) : message ? t(message) : null
   const rulesOk = RULES.map((r) => r.test(regPw))
 
   return (
@@ -267,7 +256,7 @@ export default function LoginPage({ onSuccess, actions, configured }: {
                   {errs.p && <span className="login-err" role="alert">{t(errs.p)}</span>}
                 </label>
 
-                {shownMessage && <p className="login-msg" role="alert" key={shownMessage + lockLeft}>{shownMessage}</p>}
+                {shownMessage && <p className="login-msg" role="alert" key={shownMessage}>{shownMessage}</p>}
                 {att > 0 && (
                   <p className={'login-att att-' + att} role="alert" key={'att' + att}>
                     <span className="att-pips" aria-hidden="true">{[0, 1, 2, 3].map((i) => <i key={i} className={i < att ? 'on' : ''} />)}</span>
@@ -275,9 +264,9 @@ export default function LoginPage({ onSuccess, actions, configured }: {
                   </p>
                 )}
 
-                <button type="submit" className="login-btn" disabled={lockLeft > 0 || busy || isBlocked} style={{ ['--i' as string]: 2 }}>
+                <button type="submit" className="login-btn" disabled={busy || isBlocked} style={{ ['--i' as string]: 2 }}>
                   <span className="login-btn-text">
-                    {lockLeft > 0 ? t('Patiente {n} s', { n: lockLeft }) : isBlocked ? t('Compte bloqué') : t('Se connecter')}
+                    {isBlocked ? t('Compte bloqué') : t('Se connecter')}
                   </span>
                   <svg className="login-btn-arrow" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                 </button>
@@ -345,10 +334,10 @@ export default function LoginPage({ onSuccess, actions, configured }: {
                 {regErrs.c && <span className="login-err" role="alert">{t(regErrs.c)}</span>}
               </label>
 
-              {(lockText || regMsg) && <p className="login-msg" role="alert" key={(lockText ?? regMsg ?? '') + lockLeft}>{lockText ?? t(regMsg ?? '')}</p>}
+              {regMsg && <p className="login-msg" role="alert" key={regMsg}>{t(regMsg)}</p>}
 
-              <button type="submit" className="login-btn" disabled={lockLeft > 0 || busy} style={{ ['--i' as string]: 3 }}>
-                <span className="login-btn-text">{lockLeft > 0 ? t('Patiente {n} s', { n: lockLeft }) : t('Créer le compte')}</span>
+              <button type="submit" className="login-btn" disabled={busy} style={{ ['--i' as string]: 3 }}>
+                <span className="login-btn-text">{t('Créer le compte')}</span>
                 <svg className="login-btn-arrow" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
               </button>
             </form>

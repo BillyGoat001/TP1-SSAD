@@ -1,15 +1,5 @@
 #include <string.h>
 
-/* ---------------------------------------------------------------- force brute --
- * Parcourt charset^length dans l'ordre lexicographique (odometre : le dernier
- * caractere tourne le plus vite), jusqu'a tomber sur `target` ou epuiser
- * l'espace / la limite de tentatives / etre interrompue.
- *
- * Retour : 1 = trouee (rang 1-based ecrit dans *out_rank) ;
- *          0 = espace epuise ou limite atteinte ;
- *         -1 = interrompue par *stop_flag.
- * *pos = essais reellement effectues (mis a jour tous les `report_every`,
- * et a la sortie, quelle qu'elle soit). */
 int brute_search(const char *charset, int charset_len, int length,
                   const char *target, int target_len,
                   long long limit, long long report_every,
@@ -51,17 +41,6 @@ int brute_search(const char *charset, int charset_len, int length,
     }
 }
 
-/* ------------------------------------------------------------ dictionnaire --
- * Parcourt un buffer de mots separes par '\n' (un fichier du dictionnaire,
- * deja decompresse cote Python) a la recherche de `target`.
- *
- * `base` : nombre de mots deja parcourus dans les fichiers precedents — permet
- * a *pos de rester une progression continue d'un fichier a l'autre, sans que
- * Python ait a tout recharger en memoire d'un coup.
- *
- * Retour : 1 = trouvee (position 1-based DANS CE BUFFER dans *out_rank) ;
- *          0 = buffer epuise ou limite atteinte ; -1 = interrompue.
- * *pos = base + mots parcourus dans ce buffer. */
 int dict_search_buffer(const char *buf, long long buf_len,
                         const char *target, int target_len,
                         long long limit, long long base, long long report_every,

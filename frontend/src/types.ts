@@ -36,7 +36,7 @@ export interface PlayfairTrace {
   result: string
 }
 
-// Les entiers trop grands pour JavaScript (au-dela de 2^53) arrivent en texte.
+// Les entiers trop grands pour JavaScript (au-delà de 2^53) arrivent en texte.
 type Big = number | string
 
 export interface HillStep {
@@ -66,9 +66,9 @@ export interface HillTrace {
 
 export type Trace = CaesarTrace | PlayfairTrace | HillTrace
 
-// Mise en forme renvoyee au chiffrement, a reporter au dechiffrement pour
-// retrouver les espaces : layout = [position, caractere] des non-lettres ;
-// fillers = positions des X ajoutes par Playfair/Hill.
+// Mise en forme renvoyée au chiffrement, à reporter au déchiffrement pour
+// retrouver les espaces : layout = [position, caractère] des non-lettres ;
+// fillers = positions des X ajoutés par Playfair/Hill.
 export type Layout = [number, string][]
 
 export interface CipherResponse {
@@ -80,12 +80,12 @@ export interface CipherResponse {
   layout?: Layout
   fillers?: number[]
   jmap?: number[]
-  cases?: number[]         // positions des lettres ecrites en minuscules
+  cases?: number[]         // positions des lettres écrites en minuscules
   time_us?: number | null  // temps de calcul de l'algorithme, en microsecondes
 }
 
-// ---- Echange de cles RSA (Partie 2) — voir backend/rsa_crypto.py ----
-// Les grands nombres arrivent en texte : un nombre JavaScript perd sa precision au-dela de 2^53.
+// ---- Échange de clés RSA (Partie 2) — voir backend/rsa_crypto.py ----
+// Les grands nombres arrivent en texte : un nombre JavaScript perd sa précision au-delà de 2^53.
 export interface RsaKey {
   bits: number
   p: string
@@ -101,7 +101,7 @@ export interface KeygenResponse {
   error?: string
   key?: RsaKey
 }
-/** Le « mode d'emploi » d'un message : l'algorithme et sa cle.
+/** Le « mode d'emploi » d'un message : l'algorithme et sa clé.
  *  Les nombres voyagent en texte pour garder tous leurs chiffres (Python les relit exactement). */
 export interface ExchangeParams {
   algo: Algo
@@ -137,8 +137,8 @@ export interface OpenResponse {
 
 export type Strength = 'instant' | 'faible' | 'moyen' | 'fort' | 'inviolable'
 
-// Politique appliquee au mot de passe complexe (chaque regle active = condition
-// de validite). min_length = null quand la regle de longueur est desactivee.
+// Politique appliquée au mot de passe complexe (chaque règle active = condition
+// de validité). min_length = null quand la règle de longueur est désactivée.
 export interface Rules {
   require_lower: boolean
   require_upper: boolean
@@ -154,8 +154,8 @@ export interface ValidateResult {
 }
 
 // Force brute : le backend donne les faits (espace, rang exact de la cible,
-// estimation pire-cas) ; le front anime la progression. rank = numero d'essai
-// auquel on tombe sur la cible (peut etre un tres grand entier -> string).
+// estimation pire-cas) ; le front anime la progression. rank = numéro d'essai
+// auquel on tombe sur la cible (peut être un très grand entier -> string).
 export interface BruteResult {
   ok: boolean
   error?: string
@@ -176,7 +176,7 @@ export interface BruteResult {
   findSeconds: number | null      // temps pour atteindre la cible
   findHuman: string | null
   findStrength: Strength | null
-  reallyLooped: boolean           // true = boucle reelle (petit espace)
+  reallyLooped: boolean           // true = boucle réelle (petit espace)
   limit: number | null            // limite de tentatives active
   cracked: boolean
 }
@@ -184,15 +184,15 @@ export interface BruteResult {
 export interface DictResult {
   ok: boolean
   found: boolean
-  stopped: boolean                // arrete par la limite de tentatives
+  stopped: boolean                // arrêté par la limite de tentatives
   password?: string
-  position: number | null         // rang du mot trouve
-  scanned: number                 // mots reellement parcourus
+  position: number | null         // rang du mot trouvé
+  scanned: number                 // mots réellement parcourus
   size: number                    // taille totale du dictionnaire
   limit: number | null
 }
 
-// Attaque en tache de fond (force brute « complexe » + dictionnaire) : le serveur
+// Attaque en tâche de fond (force brute « complexe » + dictionnaire) : le serveur
 // boucle pour de vrai, la progression est relue par polling (attackProgress).
 export interface AttackStartInput {
   kind: 'brute' | 'dict'
@@ -202,18 +202,18 @@ export interface AttackStartInput {
   limit?: number | null
   rules?: Rules | null
   knowComposition?: boolean
-  lang?: 'fr' | 'en'          // ordre de lecture du dictionnaire (langue de l'interface en tete)
+  lang?: 'fr' | 'en'          // ordre de lecture du dictionnaire (langue de l'interface en tête)
 }
 
 export interface AttackSnapshot {
   ok: boolean
   error?: string
   id: string
-  pos: number                 // essais / mots REELLEMENT parcourus jusqu'ici
+  pos: number                 // essais / mots RÉELLEMENT parcourus jusqu'ici
   total: number                // taille de l'espace / du dictionnaire
   done: boolean
-  elapsed: number               // secondes REELLES ecoulees depuis le depart
-  rate: number                   // essais/s REELS observes (pos ÷ elapsed)
+  elapsed: number               // secondes RÉELLES écoulées depuis le départ
+  rate: number                   // essais/s RÉELS observés (pos ÷ elapsed)
   result: (Omit<BruteResult, 'ok' | 'error'> | Omit<DictResult, 'ok'>) | null
 }
 
@@ -263,19 +263,19 @@ export interface IntegrityDemo {
   valid: boolean
 }
 
-// ---- canal A -> B reel (voir backend/integrity.py : seal / open_channel) ----
-// Le message est vraiment chiffre (Cesar/Playfair/Hill tires au hasard, comme
-// pour un mot de passe) ; `record.secret` EST le chiffre — c'est lui que
+// ---- canal A -> B réel (voir backend/integrity.py : seal / open_channel) ----
+// Le message est vraiment chiffré (César/Playfair/Hill tirés au hasard, comme
+// pour un mot de passe) ; `record.secret` EST le chiffré — c'est lui que
 // l'attaquant C peut modifier avant que B n'ouvre le canal.
 export interface CipherRecordKey {
-  shift?: number          // Cesar
+  shift?: number          // César
   key?: string            // Playfair
   matrix?: number[][]     // Hill
 }
 export interface CipherRecord {
-  method: Algo | null             // null = le message a voyage EN CLAIR (chiffrement desactive)
+  method: Algo | null             // null = le message a voyagé EN CLAIR (chiffrement désactivé)
   key: CipherRecordKey
-  secret: string                 // ce qui « voyage » — modifiable par C pour simuler une alteration
+  secret: string                 // ce qui « voyage » — modifiable par C pour simuler une altération
   layout: [number, string][]
   fillers: number[]
   jmap: number[]
@@ -284,49 +284,84 @@ export interface CipherRecord {
 export interface IntegritySealResult {
   ok: boolean
   error?: string
-  tag: string             // etiquette HMAC calculee sur le CLAIR, avant chiffrement
+  tag: string             // étiquette HMAC calculée sur le chiffré qui voyage (le message lui-même s'il n'est pas chiffré)
   record: CipherRecord
+  warning?: string | null // clé choisie par A jugée faible (avertissement du cours), sinon null
 }
 export interface IntegrityOpenResult {
   ok: boolean
   error?: string
   decrypted: string | null
-  valid: boolean | null    // null si la protection est desactivee (aucune verification faite)
+  valid: boolean | null    // null si la protection est désactivée (aucune vérification faite)
   recomputed: string | null
-  broken: boolean          // dechiffrement impossible (ex. longueur invalide apres alteration)
+  broken: boolean          // déchiffrement impossible (ex. longueur invalide après altération)
+  // De combien l'étiquette recalculée par B s'éloigne de celle de A (null : rien à comparer,
+  // protection désactivée ou chiffré illisible). Voir backend/integrity.py : tag_change.
+  changeRate: number | null    // part des bits qui diffèrent, en % (0 = identiques)
+  bitsChanged: number | null
+  bitsTotal: number | null     // 256 (SHA-256)
+  charsChanged: number | null  // caractères hexadécimaux qui diffèrent
+  charsTotal: number | null    // 64
 }
 
 // ---- Fichiers de stockage (voir backend/storage.py) ----
-// Une ligne de l'historique des chiffrements : une operation reussie.
+// Une ligne de l'historique des chiffrements : une opération réussie.
 export interface HistoryEntry {
-  id: number          // numero attribue par le backend (negatif = ligne non enregistree, gardee a l'ecran seulement)
+  id: number          // numéro attribué par le backend (négatif = ligne non enregistrée, gardée à l'écran seulement)
   at?: string         // date d'enregistrement (ISO)
   op: Operation
   clear: string       // message clair
-  cipher: string      // message chiffre
+  cipher: string      // message chiffré
   algo: Algo
   algoLabel: string
-  key: string         // la cle, en texte lisible
+  key: string         // la clé, en texte lisible
   timeUs: number | null // temps de calcul de l'algorithme, en microsecondes
 }
 export type HistoryDraft = Omit<HistoryEntry, 'id' | 'at'>
 
-// Une ligne de l'historique des attaques (page Mots de passe) : une attaque terminee ou interrompue.
+// Une ligne de l'historique des attaques (page Mots de passe) : une attaque terminée ou interrompue.
 export type PwResult = 'found' | 'blocked' | 'resist' | 'interrupted'
 export interface PwHistoryEntry {
-  id: number          // negatif = ligne non enregistree (backend injoignable), gardee a l'ecran seulement
+  id: number          // négatif = ligne non enregistrée (backend injoignable), gardée à l'écran seulement
   at?: string
   attack: 'brute' | 'dict'
   case: 'binaire' | 'numerique' | 'complexe'
   password: string
   protection: string  // « Aucune », « 5 tentatives max »…
   result: PwResult
-  tries: number       // essais effectues
-  timeSec: number     // duree de l'attaque a la vitesse de l'attaquant (secondes)
+  tries: number       // essais effectués
+  timeSec: number     // durée de l'attaque à la vitesse de l'attaquant (secondes)
 }
 export type PwHistoryDraft = Omit<PwHistoryEntry, 'id' | 'at'>
 
-// Un message de la conversation A ↔ B, tel qu'il est range dans son fichier.
+// Une ligne de l'historique de la page Intégrité : un envoi A -> B mené à son terme.
+//   intact     : protection active, étiquettes identiques
+//   detected   : protection active, étiquettes différentes (altération détectée)
+//   unchecked  : protection désactivée, B n'a rien vérifié
+//   broken     : le chiffré reçu est devenu illisible
+export type IntegrityResultKind = 'intact' | 'detected' | 'unchecked' | 'broken'
+export interface IntegrityHistoryEntry {
+  id: number          // négatif = ligne non enregistrée (backend injoignable), gardée à l'écran seulement
+  at?: string
+  message: string     // le clair de A
+  received: string | null   // ce que B a déchiffré
+  algo: Algo | null   // null = le message voyageait en clair
+  algoLabel: string
+  key: string         // clé du chiffrement, en texte lisible
+  protect: boolean
+  altered: boolean    // C a modifié le chiffré en route
+  result: IntegrityResultKind
+  changeRate: number | null   // LE chiffre clé : % de l'étiquette qui a changé
+  bitsChanged: number | null
+  bitsTotal: number | null
+  charsChanged: number | null
+  charsTotal: number | null
+  tagSent: string | null
+  tagRecomputed: string | null
+}
+export type IntegrityHistoryDraft = Omit<IntegrityHistoryEntry, 'id' | 'at'>
+
+// Un message de la conversation A ↔ B, tel qu'il est rangé dans son fichier.
 export interface ChatRecord {
   id: number
   at?: string
@@ -341,16 +376,16 @@ export type CaptchaKind = 'motion' | 'illusion' | 'shuffle'
 export interface Challenge {
   id: string
   kind: CaptchaKind
-  ttl: number                                   // secondes de validite
-  prompt: string                                // la consigne, en francais
-  pow: { challenge: string; bits: number }      // la preuve de travail a fournir
-  // motion : un nuage de points dont le mouvement dessine 4 caracteres
+  ttl: number                                   // secondes de validité
+  prompt: string                                // la consigne, en français
+  pow: { challenge: string; bits: number }      // la preuve de travail à fournir
+  // motion : un nuage de points dont le mouvement dessine 4 caractères
   width?: number; height?: number
   mask?: { w: number; h: number; bits: string }
   fg_dir?: number; speed?: number; dots?: number; noise?: number
   // illusion : une image de rayures
   image?: string
-  // shuffle : la cle et les cadenas
+  // shuffle : la clé et les cadenas
   slots?: number; start?: number; swaps?: [number, number, number][]; reveal_ms?: number
 }
 export interface LoginResult {
@@ -361,7 +396,7 @@ export interface LoginResult {
   reason?: string
   message?: string
   retry_after?: number
-  remaining?: number            // mots de passe errones encore permis avant le blocage du compte
+  remaining?: number            // mots de passe erronés encore permis avant le blocage du compte
 }
 export interface AuthStatus {
   ok: boolean

@@ -1,6 +1,7 @@
-# Auto-test du backend : logique + tous les endpoints de l'API. Lancer : python _selftest.py
+# -*- coding: utf-8 -*-
+"""Backend self-test: logic + all API endpoints. Run: python _selftest.py"""
 import os
-os.environ["TP_POW_BITS"] = "12"        # preuve de travail legere pour les tests
+os.environ["TP_POW_BITS"] = "12"        # preuve de travail légère pour les tests
 os.environ["TP_AUTH_OFF"] = "1"        # les tests de l'API ci-dessous tournent sans connexion
 import encryption as en
 import traces
@@ -9,7 +10,6 @@ import attacks
 import integrity
 import auth
 
-# Imprime un titre de section dans la sortie des tests.
 def section(t): print("\n=== " + t + " ===")
 
 # ---- ciphers logic + traces ----
@@ -69,7 +69,7 @@ except ValueError:
     pass
 kA, kB = rsa.generate_keypair(512), rsa.generate_keypair(512)
 sealed = rsa.encrypt_text("caesar|3|right", kB["e"], kB["n"])
-try:   # l'espion (ou A) avec une autre cle privee ne relit pas le mode d'emploi
+try:   # l'espion (ou A) avec une autre clé privée ne relit pas le mode d'emploi
     wrong = rsa.decrypt_blocks([b["c"] % kA["n"] for b in sealed["blocks"]], kA["d"], kA["n"])
     assert wrong["text"] != "caesar|3|right"
 except ValueError:
@@ -309,7 +309,7 @@ dm = integrity.demo("sharedkey", "Transfer 100", "Transfer 900")
 assert dm["tampered"] and not dm["valid"]
 print("HMAC sign/verify + tamper detection OK")
 
-# ---- canal A -> B reel (chiffre + etiquette sur le clair) ----
+# ---- canal A -> B reel (chiffre + etiquette sur le chiffre qui voyage) ----
 msg = "Transfer 100 to B"
 sealed = integrity.seal("sharedkey", msg)
 assert sealed["record"]["method"] in ("caesar", "playfair", "hill")
@@ -323,10 +323,7 @@ assert r["decrypted"] == msg and r["valid"] is True and not r["broken"]
 r = integrity.open_channel("sharedkey", sealed["record"], False, sealed["tag"])
 assert r["decrypted"] == msg and r["valid"] is None and not r["broken"]
 
-# C altere un caractere du chiffre : le dechiffre change forcement
-# (premier caractere, jamais un filler de bourrage Playfair/Hill ajoute en fin de
-# bloc -- sinon l'alteration serait parfois strip_fillers()-ee sans effet visible,
-# un faux negatif aleatoire selon l'algo tire au hasard)
+# C altere un caractere du chiffre (ici le premier : le dechiffre change aussi)
 tampered = dict(sealed["record"])
 s = tampered["secret"]
 tampered["secret"] = ("A" if s[0] != "A" else "B") + s[1:]
@@ -344,7 +341,32 @@ broken = dict(hrecord)
 broken["secret"] = broken["secret"][:-1]
 r_broken = integrity.open_channel("sharedkey", broken, True, htag)
 assert r_broken["broken"] and r_broken["decrypted"] is None
-print("canal A->B reel : chiffre+etiquette sur le clair, alteration detectee, protection off = faille demontree OK")
+# chiffre illisible MAIS protection ON : B le detecte quand meme (etiquette sur le chiffre recu), avec un taux
+hs = integrity.seal("sharedkey", msg, True, "hill")
+hb = dict(hs["record"]); hb["secret"] = hb["secret"][:-1]
+r_hb = integrity.open_channel("sharedkey", hb, True, hs["tag"])
+assert r_hb["broken"] and r_hb["valid"] is False and r_hb["changeRate"] is not None and r_hb["decrypted"] is None
+print("canal A->B reel : etiquette sur le chiffre qui voyage, alteration detectee, protection off = faille demontree OK")
+
+# REGRESSION : l'etiquette doit proteger le chiffre, pas seulement le clair retrouve. Avant, un chiffre Playfair
+# AJOUTE d'une lettre se dechiffrait pareil (lettre ignoree) -> etiquette identique -> « intact » a tort.
+import random as _rnd
+_msgs = ["coucou", "Virement de 100 DA", "Hello World", "a", "Zz9!", "xx yy zz"]
+for _method in ("caesar", "playfair", "hill"):
+    for _m in _msgs:
+        for _ in range(8):
+            _s = integrity.seal("k", _m, True, _method)
+            assert _s["record"]["method"] == _method
+            _sec, _i = _s["record"]["secret"], _rnd.randrange(len(_s["record"]["secret"]))
+            assert integrity.open_channel("k", _s["record"], True, _s["tag"])["valid"] is True     # intact : jamais de faux positif
+            for _new in (_sec + "G", _sec[:-1], _sec[:_i] + ("A" if _sec[_i] != "A" else "B") + _sec[_i + 1:], _sec[:_i] + "Q" + _sec[_i:]):
+                _r = integrity.open_channel("k", {**_s["record"], "secret": _new}, True, _s["tag"])
+                assert _r["valid"] is False and _r["changeRate"] is not None, (_method, _m, _sec, _new)
+try:
+    integrity.seal("k", "x", True, "rot13"); raise SystemExit("methode inconnue acceptee")
+except ValueError:
+    pass
+print("regression : toute alteration du chiffre est detectee (3 algos, ajout / retrait / changement / insertion), aucun faux positif OK")
 
 # chiffrement DESACTIVE (encrypt=False) : le message voyage en clair, mais l'etiquette
 # HMAC protege quand meme l'integrite independamment du chiffrement
@@ -366,7 +388,7 @@ r = c.post("/api/cipher", json={"algo":"caesar","operation":"encrypt","message":
 assert r["ok"] and r["result"] == "KHOOR", r
 r = c.post("/api/cipher", json={"algo":"hill","operation":"encrypt","message":"HELP","matrix":[[3,3],[2,5]]}).json()
 assert r["ok"] and r["result"] == "HIAT", r
-# temps de calcul : un nombre positif au chiffrement ET au dechiffrement (les 3 algos)
+# temps de calcul : un nombre positif au chiffrement ET au déchiffrement (les 3 algos)
 for algo, kw in (("caesar", {"shift": 3}), ("playfair", {"key": "MONARCHY"}), ("hill", {"matrix": [[3, 3], [2, 5]]})):
     e = c.post("/api/cipher", json={"algo": algo, "operation": "encrypt", "message": "BONJOUR LE MONDE", **kw}).json()
     d = c.post("/api/cipher", json={"algo": algo, "operation": "decrypt", "message": e["result"], **kw}).json()
@@ -374,8 +396,7 @@ for algo, kw in (("caesar", {"shift": 3}), ("playfair", {"key": "MONARCHY"}), ("
         assert isinstance(resp["time_us"], (int, float)) and 0 <= resp["time_us"] < 1_000_000, (algo, resp.get("time_us"))
 print("temps de calcul (time_us) renvoyé au chiffrement et au déchiffrement OK")
 
-# espaces : le chiffre sort en un seul bloc, le dechiffrement les retrouve (les 3 algos)
-# Chiffre puis dechiffre `msg` via l'API et renvoie les deux reponses JSON.
+# espaces : le chiffré sort en un seul bloc, le déchiffrement les retrouve (les 3 algos)
 def _roundtrip(algo, msg, **kw):
     e = c.post("/api/cipher", json={"algo":algo,"operation":"encrypt","message":msg,**kw}).json()
     assert e["ok"] and " " not in e["result"], e                 # bloc sans espaces
@@ -386,23 +407,22 @@ e, d = _roundtrip("caesar", "BONJOUR B", shift=3)
 assert e["result"] == "ERQMRXUE" and e["layout"] == [[7, " "]] and e["fillers"] == [], e
 assert d["result"] == "BONJOUR B", d
 e, d = _roundtrip("hill", "ABCDE FG", matrix=[[3,3],[2,5]])
-assert e["fillers"] == [7] and d["result"] == "ABCDE FG", (e, d)   # bourrage X retire
+assert e["fillers"] == [7] and d["result"] == "ABCDE FG", (e, d)   # bourrage X retiré
 e, d = _roundtrip("playfair", "HELLO WORLD", key="PLAYFAIR")
-assert e["fillers"] == [3, 11] and d["result"] == "HELLO WORLD", (e, d)  # X inseres retires
-# Playfair : les J (fusionnes en I au chiffrement) sont restitues au dechiffrement
+assert e["fillers"] == [3, 11] and d["result"] == "HELLO WORLD", (e, d)  # X insérés retirés
+# Playfair : les J (fusionnés en I au chiffrement) sont restitués au déchiffrement
 e, d = _roundtrip("playfair", "JE JOUE AU JEU", key="MONARCHY")
 assert e["jmap"] == [0, 2, 8] and d["result"] == "JE JOUE AU JEU", (e, d)
 e, d = _roundtrip("playfair", "BONJOUR LE JURY", key="MONARCHY")
 assert d["result"] == "BONJOUR LE JURY", (e, d)
-# sans metadonnees : retro-compatible (dechiffrement brut, sans espaces restitues)
+# sans métadonnées : rétro-compatible (déchiffrement brut, sans espaces restitués)
 d0 = c.post("/api/cipher", json={"algo":"caesar","operation":"decrypt","message":"ERQMRXUE","shift":3}).json()
 assert d0["ok"] and d0["result"] == "BONJOURB", d0
 print("espaces: bloc chiffré sans espaces + déchiffrement qui les retrouve (César/Hill/Playfair) OK")
-# minuscules : on chiffre en majuscules, la casse est memorisee et remise au dechiffrement
-# Comme _roundtrip mais en transmettant aussi la casse (`cases`) au dechiffrement.
+# minuscules : on chiffre en majuscules, la casse est mémorisée et remise au déchiffrement
 def _roundtrip_case(algo, msg, **kw):
     e = c.post("/api/cipher", json={"algo":algo,"operation":"encrypt","message":msg,**kw}).json()
-    assert e["ok"] and e["result"] == e["result"].upper(), e      # le chiffre reste en majuscules
+    assert e["ok"] and e["result"] == e["result"].upper(), e      # le chiffré reste en majuscules
     d = c.post("/api/cipher", json={"algo":algo,"operation":"decrypt","message":e["result"],
                "layout":e["layout"],"fillers":e["fillers"],"jmap":e["jmap"],"cases":e["cases"],**kw}).json()
     return e, d
@@ -414,11 +434,11 @@ e, d = _roundtrip_case("playfair", "Je joue au Jeu", key="PLAYFAIR")            
 assert d["result"] == "Je joue au Jeu", (e, d)
 e, d = _roundtrip_case("hill", "Hello World", matrix=[[3,3],[2,5]])             # casse + bourrage X
 assert d["result"] == "Hello World", (e, d)
-# le chiffre d'un message en minuscules = celui du meme message en majuscules
+# le chiffré d'un message en minuscules = celui du même message en majuscules
 a = c.post("/api/cipher", json={"algo":"caesar","operation":"encrypt","message":"bonjour","shift":3}).json()
 b = c.post("/api/cipher", json={"algo":"caesar","operation":"encrypt","message":"BONJOUR","shift":3}).json()
 assert a["result"] == b["result"] == "ERQMRXU" and a["cases"] == list(range(7)) and b["cases"] == [], (a, b)
-# sans la casse (chiffre colle a la main) : dechiffrement en majuscules, rien ne plante
+# sans la casse (chiffré collé à la main) : déchiffrement en majuscules, rien ne plante
 d0 = c.post("/api/cipher", json={"algo":"caesar","operation":"decrypt","message":"ERQMRXU","shift":3,"layout":[],"fillers":[]}).json()
 assert d0["result"] == "BONJOUR", d0
 print("minuscules: chiffré en majuscules + casse restituée au déchiffrement (César/Playfair/Hill) OK")
@@ -434,7 +454,7 @@ r = c.post("/api/passwords/bruteforce", json={"case": "binaire", "target": "111"
 assert r["ok"] and not r["cracked"] and r["limit"] == 3, r
 r = c.post("/api/passwords/bruteforce", json={"case": "complexe", "target": "abcdefgh", "length": 8,
             "rules": {"require_upper": True}}).json()
-assert r["ok"] and not r["valid"] and r["rank"] is None, r   # politique non respectee
+assert r["ok"] and not r["valid"] and r["rank"] is None, r   # politique non respectée
 r = c.post("/api/passwords/validate", json={"case": "complexe", "target": "Abcdef1!", "length": 8,
             "rules": {"require_lower": True, "require_upper": True, "require_digit": True, "require_symbol": True}}).json()
 assert r["ok"] and r["valid"], r
@@ -443,8 +463,8 @@ assert r["ok"] and r["found"] and r["position"] == 1, r
 r = c.post("/api/passwords/dictionary", json={"target": "azerty", "limit": 0}).json()
 assert r["ok"] and not r["found"] and r["stopped"], r
 assert not c.post("/api/passwords/bruteforce", json={"case": "zzz", "target": "1"}).json()["ok"]
-assert c.post("/api/passwords/hash", json={"password": "x"}).status_code in (404, 405)  # endpoint supprime
-# echange complet A -> B : chiffrement Cesar, coffre RSA, ouverture, dechiffrement
+assert c.post("/api/passwords/hash", json={"password": "x"}).status_code in (404, 405)  # endpoint supprimé
+# échange complet A -> B : chiffrement César, coffre RSA, ouverture, déchiffrement
 A = c.post("/api/rsa/keygen", json={"bits": 1024}).json()["key"]
 B = c.post("/api/rsa/keygen", json={"bits": 1024}).json()["key"]
 enc = c.post("/api/cipher", json={"algo":"caesar","operation":"encrypt","message":"BONJOUR","shift":3,"direction":"right"}).json()
@@ -511,6 +531,46 @@ op_off = c.post("/api/integrity/open",
 assert op_off["ok"] and op_off["valid"] is None and op_off["decrypted"] == op_on["decrypted"]
 print("integrite (P4) : seal/open par l'API, chiffre altere detecte avec protection, invisible sans OK")
 
+# A choisit l'algorithme (par defaut : au hasard)
+for _meth in ("caesar", "playfair", "hill"):
+    assert c.post("/api/integrity/seal", json={"key": "k", "message": "Transfer 100", "method": _meth}).json()["record"]["method"] == _meth
+assert c.post("/api/integrity/seal", json={"key": "k", "message": "Transfer 100", "method": "rot13"}).status_code == 422
+assert c.post("/api/integrity/seal", json={"key": "k", "message": "Transfer 100", "encrypt": False, "method": "hill"}).json()["record"]["method"] is None
+print("integrite : algorithme choisi par A (ou au hasard), clair prioritaire si chiffrement desactive OK")
+# A choisit aussi la CLE (sinon tiree au hasard) ; cle invalide -> erreur claire, pas de plantage
+_k = {"key": "k", "message": "Hello World"}
+_r = c.post("/api/integrity/seal", json={**_k, "method": "caesar", "shift": 3}).json()
+assert _r["ok"] and _r["record"]["key"] == {"shift": 3} and _r["record"]["secret"] == "KHOORZRUOG" and _r["warning"] is None
+_r = c.post("/api/integrity/seal", json={**_k, "method": "playfair", "playfair_key": "monarchy!"}).json()
+assert _r["ok"] and _r["record"]["key"] == {"key": "MONARCHY"}
+_r = c.post("/api/integrity/seal", json={**_k, "method": "hill", "matrix": [[3, 3], [2, 5]]}).json()
+assert _r["ok"] and _r["record"]["key"] == {"matrix": [[3, 3], [2, 5]]}
+assert c.post("/api/integrity/seal", json={**_k, "method": "caesar", "shift": 13}).json()["warning"]       # ROT13 : avertissement du cours
+_r = c.post("/api/integrity/seal", json={**_k, "method": "hill", "matrix": [[1, 2], [2, 4]]}).json()
+assert not _r["ok"] and "inversible" in _r["error"]                                                          # B ne pourrait pas dechiffrer
+_r = c.post("/api/integrity/seal", json={**_k, "method": "hill", "matrix": [[1, 2, 3], [4, 5]]}).json()
+assert not _r["ok"]
+assert c.post("/api/integrity/seal", json={**_k, "method": "caesar", "shift": -1}).status_code == 422
+_r = c.post("/api/integrity/seal", json={**_k, "method": "caesar"}).json()                                     # pas de cle -> au hasard
+assert _r["ok"] and 1 <= _r["record"]["key"]["shift"] <= 25
+# la cle choisie est bien celle que B utilise pour dechiffrer
+_s = c.post("/api/integrity/seal", json={**_k, "method": "playfair", "playfair_key": "ZEBRA"}).json()
+_o = c.post("/api/integrity/open", json={"key": "k", "record": _s["record"], "protect": True, "tag": _s["tag"]}).json()
+assert _o["valid"] is True and _o["decrypted"] == "Hello World"
+print("integrite : cle choisie par A (César / Playfair / Hill), avertissements, matrice non inversible refusee OK")
+
+# taux de changement de l'etiquette (bits qui different entre l'etiquette de A et celle recalculee par B)
+assert op["changeRate"] == 0.0 and op["bitsChanged"] == 0 and op["bitsTotal"] == 256 and op["charsChanged"] == 0 and op["charsTotal"] == 64
+assert op_on["bitsTotal"] == 256 and op_on["charsTotal"] == 64
+assert 20 <= op_on["changeRate"] <= 80, op_on["changeRate"]                 # avalanche SHA-256 : ~50 %
+assert abs(op_on["changeRate"] - 100 * op_on["bitsChanged"] / 256) < 0.06 and 0 < op_on["charsChanged"] <= 64
+assert op_off["changeRate"] is None and op_off["bitsChanged"] is None       # protection off : rien a comparer
+import integrity as _ig
+assert _ig.tag_change("00" * 32, "ff" * 32)["changeRate"] == 100.0
+assert _ig.tag_change("00" * 32, "00" * 31 + "01") == {"changeRate": 0.4, "bitsChanged": 1, "bitsTotal": 256, "charsChanged": 1, "charsTotal": 64}
+assert _ig.tag_change(None, "ab")["changeRate"] is None and _ig.tag_change("zz", "zz")["changeRate"] is None and _ig.tag_change("00", "0000")["changeRate"] is None
+print("integrite : taux de changement de l'etiquette (0 % intact, ~50 % altere, rien sans protection) OK")
+
 print("All endpoints OK")
 
 # ---- fichiers : historique des chiffrements + conversation A <-> B ----
@@ -518,46 +578,45 @@ section("Fichiers (historique + conversation)")
 import json, os, tempfile
 import storage
 _tmp = tempfile.TemporaryDirectory()
-os.environ["DATA_DIR"] = _tmp.name          # on n'ecrit jamais dans backend/data/ pendant les tests
+os.environ["DATA_DIR"] = _tmp.name          # on n'écrit jamais dans backend/data/ pendant les tests
 H = os.path.join(_tmp.name, storage.HISTORY_FILE)
 V = os.path.join(_tmp.name, storage.CONVERSATION_FILE)
 
-# Fabrique une entree d'historique de chiffrement pour les tests.
 def _entry(clear, **kw):
     return {"op": "encrypt", "clear": clear, "cipher": "KHOOR", "algo": "caesar", "algoLabel": "César",
             "key": "3 (droite)", "timeUs": 2.5, **kw}
 
-assert c.get("/api/history").json() == {"ok": True, "entries": []}          # rien au depart, et aucun fichier cree
+assert c.get("/api/history").json() == {"ok": True, "entries": []}          # rien au départ, et aucun fichier créé
 assert not os.path.exists(H)
 ids = [c.post("/api/history", json=_entry(m)).json()["entry"]["id"] for m in ("UN", "DEUX", "TROIS")]
 assert ids == [1, 2, 3], ids
 lst = c.get("/api/history").json()["entries"]
-assert [e["clear"] for e in lst] == ["TROIS", "DEUX", "UN"] and lst[0]["at"], lst   # la plus recente en premier
+assert [e["clear"] for e in lst] == ["TROIS", "DEUX", "UN"] and lst[0]["at"], lst   # la plus récente en premier
 disk = json.load(open(H, encoding="utf-8"))                                 # le fichier existe et contient bien tout
 assert disk["version"] == 1 and disk["next_id"] == 4 and [e["id"] for e in disk["entries"]] == [1, 2, 3], disk
 assert set(disk["entries"][0]) >= {"id", "at", "op", "clear", "cipher", "algo", "algoLabel", "key", "timeUs"}
-# suppression individuelle : seule la ligne visee disparait, du fichier aussi
+# suppression individuelle : seule la ligne visée disparaît, du fichier aussi
 assert c.delete("/api/history/2").json() == {"ok": True, "deleted": True}
 assert [e["id"] for e in c.get("/api/history").json()["entries"]] == [3, 1]
 assert [e["id"] for e in json.load(open(H, encoding="utf-8"))["entries"]] == [1, 3]
-assert c.delete("/api/history/2").json() == {"ok": True, "deleted": False}  # deja supprimee : sans effet
+assert c.delete("/api/history/2").json() == {"ok": True, "deleted": False}  # déjà supprimée : sans effet
 assert c.delete("/api/history/999").json()["deleted"] is False
-assert c.post("/api/history", json=_entry("QUATRE")).json()["entry"]["id"] == 4   # un numero supprime n'est pas reattribue
+assert c.post("/api/history", json=_entry("QUATRE")).json()["entry"]["id"] == 4   # un numéro supprimé n'est pas réattribué
 assert c.delete("/api/history").json() == {"ok": True, "deleted": 3}
 assert c.get("/api/history").json()["entries"] == []
-assert c.post("/api/history", json=_entry("CINQ")).json()["entry"]["id"] == 5     # le compteur continue apres « Vider »
-# entrees invalides refusees
+assert c.post("/api/history", json=_entry("CINQ")).json()["entry"]["id"] == 5     # le compteur continue après « Vider »
+# entrées invalides refusées
 assert c.post("/api/history", json=_entry("X", op="hack")).status_code == 422
 assert c.post("/api/history", json=_entry("X" * 6000)).status_code == 422
 assert c.post("/api/history", json=_entry("X", algo="rot13")).status_code == 422
-# plafond : on garde les 200 plus recentes
+# plafond : on garde les 200 plus récentes
 for i in range(205):
     storage.history_add(_entry("N%d" % i))
 assert len(c.get("/api/history").json()["entries"]) == storage.MAX_HISTORY == 200
 assert c.get("/api/history").json()["entries"][0]["clear"] == "N204"
-# ecriture atomique : aucun fichier temporaire oublie
+# écriture atomique : aucun fichier temporaire oublié
 assert not [f for f in os.listdir(_tmp.name) if f.startswith(".tmp-")], os.listdir(_tmp.name)
-# fichier abime : on repart propre, sans planter, et l'original est garde de cote
+# fichier abîmé : on repart propre, sans planter, et l'original est gardé de côté
 open(H, "w", encoding="utf-8").write("{pas du json")
 assert c.get("/api/history").json()["entries"] == [] and os.path.exists(H + ".illisible")
 print("historique : fichier JSON, ajout, suppression d'UNE ligne, vidage, plafond, fichier abîmé OK")
@@ -570,7 +629,7 @@ assert r["ok"] and not r["duplicate"] and r["message"]["from"] == "a" and r["mes
 r = c.post("/api/conversation", json={**msg, "id": 1002, "from": "b", "plain": "COUCOU",
            "params": {"algo": "hill", "matrix": [["3", "3"], ["2", "5"]]}}).json()
 assert r["ok"]
-assert c.post("/api/conversation", json=msg).json()["duplicate"] is True      # meme numero : pas de doublon
+assert c.post("/api/conversation", json=msg).json()["duplicate"] is True      # même numéro : pas de doublon
 conv = c.get("/api/conversation").json()["messages"]
 assert [m["id"] for m in conv] == [1001, 1002] and [m["from"] for m in conv] == ["a", "b"], conv   # ordre d'envoi
 assert conv[1]["params"]["matrix"] == [["3", "3"], ["2", "5"]] and conv[0]["params"]["shift"] == "3"
@@ -584,7 +643,6 @@ print("conversation A<->B : fichier JSON, ordre d'envoi, pas de doublon, validat
 
 # ---- historique des attaques sur mots de passe ----
 P = os.path.join(_tmp.name, storage.PW_HISTORY_FILE)
-# Fabrique une entree d'historique d'attaque de mot de passe pour les tests.
 def _pw(pwd, **kw):
     return {"attack": "brute", "case": "binaire", "password": pwd, "protection": "Aucune",
             "result": "found", "tries": 5, "timeSec": 5e-10, **kw}
@@ -593,22 +651,48 @@ i1 = c.post("/api/pw-history", json=_pw("101")).json()["entry"]
 i2 = c.post("/api/pw-history", json=_pw("2413", attack="dict", case="numerique", result="interrupted", tries=1.5e12, timeSec=150.0)).json()["entry"]
 assert (i1["id"], i2["id"]) == (1, 2) and i1["at"]
 assert [e["id"] for e in c.get("/api/pw-history").json()["entries"]] == [2, 1]
-assert c.get("/api/history").json()["entries"] == []        # independant de l'historique des chiffrements
+assert c.get("/api/history").json()["entries"] == []        # indépendant de l'historique des chiffrements
 assert c.delete("/api/pw-history/1").json() == {"ok": True, "deleted": True}
 assert c.delete("/api/pw-history/1").json() == {"ok": True, "deleted": False}
-assert c.post("/api/pw-history", json=_pw("x")).json()["entry"]["id"] == 3     # numero jamais reattribue
+assert c.post("/api/pw-history", json=_pw("x")).json()["entry"]["id"] == 3     # numéro jamais réattribué
 assert c.delete("/api/pw-history").json() == {"ok": True, "deleted": 2}
 assert c.post("/api/pw-history", json=_pw("x", result="hack")).status_code == 422
 assert c.post("/api/pw-history", json=_pw("x", tries=-1)).status_code == 422
 assert c.post("/api/pw-history", json=_pw("x" * 300)).status_code == 422
 assert json.load(open(P, encoding="utf-8"))["version"] == 1
 print("historique des attaques : ajout, suppression d'UNE ligne, vidage, validation, fichier à part OK")
+
+# ---- historique de l'integrite (envois A -> B) ----
+IH = os.path.join(_tmp.name, storage.INTEGRITY_HISTORY_FILE)
+def _ih(**kw):
+    return {"message": "Virement 100", "received": "Virement 100", "algo": "playfair", "algoLabel": "Playfair",
+            "key": "MONARCHY", "protect": True, "altered": False, "result": "intact", "changeRate": 0.0,
+            "bitsChanged": 0, "bitsTotal": 256, "charsChanged": 0, "charsTotal": 64, **kw}
+assert c.get("/api/integrity-history").json() == {"ok": True, "entries": []} and not os.path.exists(IH)
+j1 = c.post("/api/integrity-history", json=_ih()).json()["entry"]
+j2 = c.post("/api/integrity-history", json=_ih(altered=True, result="detected", changeRate=51.6, bitsChanged=132, charsChanged=60, received="Virement 900")).json()["entry"]
+j3 = c.post("/api/integrity-history", json=_ih(algo=None, algoLabel="Aucun (en clair)", key="", protect=False, altered=True,
+                                              result="unchecked", changeRate=None, bitsChanged=None, bitsTotal=None, charsChanged=None, charsTotal=None)).json()["entry"]
+assert (j1["id"], j2["id"], j3["id"]) == (1, 2, 3) and j1["at"]
+lst = c.get("/api/integrity-history").json()["entries"]
+assert [e["id"] for e in lst] == [3, 2, 1] and lst[1]["changeRate"] == 51.6 and lst[2]["changeRate"] == 0.0 and lst[0]["changeRate"] is None
+assert c.get("/api/history").json()["entries"] == [] and c.get("/api/pw-history").json()["entries"] == []   # fichier a part
+assert c.delete("/api/integrity-history/2").json() == {"ok": True, "deleted": True}
+assert c.delete("/api/integrity-history/2").json() == {"ok": True, "deleted": False}
+assert c.post("/api/integrity-history", json=_ih()).json()["entry"]["id"] == 4          # numero jamais reattribue
+assert c.delete("/api/integrity-history").json() == {"ok": True, "deleted": 3}
+assert c.post("/api/integrity-history", json=_ih(result="hack")).status_code == 422
+assert c.post("/api/integrity-history", json=_ih(changeRate=101)).status_code == 422
+assert c.post("/api/integrity-history", json=_ih(algo="rot13")).status_code == 422
+assert c.post("/api/integrity-history", json=_ih(message="X" * 6000)).status_code == 422
+assert json.load(open(IH, encoding="utf-8"))["version"] == 1
+print("historique de l'integrite : ajout, taux de changement, suppression d'UNE ligne, vidage, validation, fichier a part OK")
 _tmp.cleanup()
 del os.environ["DATA_DIR"]
 
 
 section("Avertissements de clés faibles (limites et failles)")
-# Hill : matrice de permutation = memes lettres, ordre change
+# Hill : matrice de permutation = mêmes lettres, ordre changé
 for M in ([[0, 1], [1, 0]], [[0, 0, 1], [0, 1, 0], [1, 0, 0]], [[0, 1, 0], [0, 0, 1], [1, 0, 0]],
           [[0, 0, 0, 1], [0, 0, 1, 0], [0, 1, 0, 0], [1, 0, 0, 0]], [[0, 27], [1, 0]]):
     w = en.hill_weak_key(M)
@@ -621,15 +705,15 @@ assert "diagonale" in en.hill_weak_key([[3, 0], [0, 3]])
 assert "PAS déchiffrer" in en.hill_weak_key([[2, 4], [1, 2]])
 assert en.hill_weak_key([[3, 3], [2, 5]]) is None
 assert en.hill_weak_key([[1, 1], [0, 1]]) is None            # un 1 par ligne mais pas par colonne : pas une permutation
-# Playfair : cles qui laissent la grille de l'alphabet (26 : vide, A, AB, ... alphabet complet, + J compte pour I)
+# Playfair : clés qui laissent la grille de l'alphabet (26 : vide, A, AB, ... alphabet complet, + J compté pour I)
 alpha = "ABCDEFGHIKLMNOPQRSTUVWXYZ"
 for k in [alpha[:i] for i in range(26)] + ["ABCDEFGHJ", "abc", "A B C"]:
     w = en.playfair_weak_key(k)
     assert w and "alphabet" in w, (k, w)
 for k in ("MONARCHY", "ACB", "ABD", "BCDEF", "Z", "I", "J", "PLAYFAIR"):
     assert en.playfair_weak_key(k) is None, k
-assert en.playfair_encrypt("ABCD", "ABC") == "BCDE"             # meme ligne : decalage d'une place
-# via l'API : l'avertissement accompagne le resultat (chiffrement ET dechiffrement)
+assert en.playfair_encrypt("ABCD", "ABC") == "BCDE"             # même ligne : décalage d'une place
+# via l'API : l'avertissement accompagne le résultat (chiffrement ET déchiffrement)
 r = c.post("/api/cipher", json={"algo": "playfair", "operation": "encrypt", "message": "ABCD", "key": "ABCDE"}).json()
 assert r["ok"] and r["result"] == "BCDE" and "alphabet" in r["warning"], r
 r = c.post("/api/cipher", json={"algo": "playfair", "operation": "encrypt", "message": "ABCD", "key": "MONARCHY"}).json()
@@ -653,7 +737,7 @@ os.environ["USERS_DB"] = os.path.join(tempfile.mkdtemp(), "users.db")         # 
 auth.reset_limits()
 PW = "Mot-de-passe-de-test-42"
 auth.set_password("alice", PW)
-# chiffrement des mots de passe : reversible, un algorithme et une cle au hasard, jamais de hachage
+# chiffrement des mots de passe : réversible, un algorithme et une clé au hasard, jamais de hachage
 import random as _random
 _rnd = _random.Random(7)
 _alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?#@$%&*-_."
@@ -666,7 +750,7 @@ for method in auth.METHODS:
         assert auth.decipher(rec) == pwd, (method, pwd, key)                                # aller-retour exact (J, X, minuscules, symboles)
         assert auth.verify_password(pwd, rec) and not auth.verify_password(pwd + "a", rec)
         assert rec["secret"] == "" or (rec["secret"].isalpha() and rec["secret"].isupper())  # le secret : lettres majuscules seulement
-for pwd in ("Jaja-XXQ-jj1!", "xx", "ZZ9", "Ab1!Ab1!"):                                      # cas piegeux : J, X, doubles lettres
+for pwd in ("Jaja-XXQ-jj1!", "xx", "ZZ9", "Ab1!Ab1!"):                                      # cas piégeux : J, X, doubles lettres
     for method in auth.METHODS:
         rec = auth.encipher(pwd, method, auth.random_key(method))
         assert auth.decipher(rec) == pwd, (method, pwd)
@@ -674,34 +758,34 @@ seen_methods = {auth.make_record("Abcdef1!")["method"] for _ in range(80)}
 assert seen_methods == set(auth.METHODS), seen_methods                                       # le tirage utilise bien les trois
 r1, r2 = auth.make_record(PW), auth.make_record(PW)
 assert r1["secret"] != PW.upper() and auth.decipher(r1) == PW
-row = db.get_user("ALICE")                                                                  # base : nom insensible a la casse
+row = db.get_user("ALICE")                                                                  # base : nom insensible à la casse
 assert row["username"] == "alice" and row["method"] in auth.METHODS and row["secret"].isalpha()
 assert auth.decipher(row) == PW and not auth.verify_password("faux", row)
-assert not auth.verify_password("Mot-de-passe-de-test-é2", row)                              # accents refuses sans erreur
-if db.PG:                                                                                     # base Postgres (DATABASE_URL) : meme verif, dans la table
+assert not auth.verify_password("Mot-de-passe-de-test-é2", row)                              # accents refusés sans erreur
+if db.PG:                                                                                     # base Postgres (DATABASE_URL) : même vérif, dans la table
     with db.closing(db._connect()) as _con:
         raw = repr(_con.execute(db._q("SELECT * FROM users")).fetchall()).encode()
 else:
     raw = open(os.environ["USERS_DB"], "rb").read()                                          # base SQLite : le fichier
 assert PW.encode() not in raw and b"Motdepassedetest" not in raw                             # le mot de passe n'est pas en clair dans la base
 assert "pbkdf2" not in open("auth.py", encoding="utf-8").read().lower()                  # aucun hachage de mot de passe
-# tentatives : au plus 4 mots de passe errones de suite, PAR COUPLE (compte, IP)
+# tentatives : au plus 4 mots de passe erronés de suite, PAR COUPLE (compte, IP)
 IP1, IP2 = "1.2.3.4", "9.9.9.9"
 assert auth.attempt_login("Alice", PW, IP1) == ("alice", auth.MAX_ATTEMPTS)
 assert auth.attempt_login("alice", "x1", IP1)[1] == 3 and auth.attempt_login("alice", "x2", IP1)[1] == 2
-assert auth.attempt_login("alice", PW, IP1)[0] == "alice"                      # une reussite remet a zero
+assert auth.attempt_login("alice", PW, IP1)[0] == "alice"                      # une réussite remet à zéro
 assert [auth.attempt_login("alice", "x", IP1)[1] for _ in range(4)] == [3, 2, 1, 0]
 assert auth.is_blocked("alice", IP1) and db.unlock("alice") and not auth.is_blocked("alice", IP1)
-assert [auth.attempt_login("inconnu", "x", IP1)[1] for _ in range(4)] == [3, 2, 1, 0] and auth.is_blocked("inconnu", IP1)   # memes reponses pour un nom inconnu
+assert [auth.attempt_login("inconnu", "x", IP1)[1] for _ in range(4)] == [3, 2, 1, 0] and auth.is_blocked("inconnu", IP1)   # mêmes réponses pour un nom inconnu
 auth.reset_limits()
-# le blocage est scope par IP : une autre IP sur le MEME compte n'est pas affectee
+# le blocage est scopé par IP : une autre IP sur le MÊME compte n'est pas affectée
 assert [auth.attempt_login("alice", "x", IP1)[1] for _ in range(4)] == [3, 2, 1, 0]
-assert auth.is_blocked("alice", IP1) and not auth.is_blocked("alice", IP2)                        # IP2 jamais essayee : pas bloquee
+assert auth.is_blocked("alice", IP1) and not auth.is_blocked("alice", IP2)                        # IP2 jamais essayée : pas bloquée
 assert auth.attempt_login("alice", PW, IP2)[0] == "alice"                                          # ... et peut se connecter avec le bon mot de passe
-assert db.unlock("alice") and not auth.is_blocked("alice", IP1)                                    # --unlock debloque toutes les IP d'un coup
+assert db.unlock("alice") and not auth.is_blocked("alice", IP1)                                    # --unlock débloque toutes les IP d'un coup
 auth.reset_limits()
 print("blocage par couple (compte, IP) : une IP bloquée n'affecte pas les autres OK")
-# inscription : nom, regles du mot de passe, doublon
+# inscription : nom, règles du mot de passe, doublon
 assert auth.password_problem("Abcdef1!") is None and auth.password_problem("A1!aaaaa") is None
 for bad in ("Abc1!", "abcdefg1!", "ABCDEFG1!", "Abcdefgh!", "Abcdefg12", "Abcdé1!x", "Abc def1!", "A" * 70 + "a1!"):
     assert auth.password_problem(bad), bad
@@ -711,13 +795,13 @@ assert auth.register("Carol", "Abcdef1!") == ("Carol", None) and auth.register("
 assert auth.attempt_login("carol", "Abcdef1!", IP1)[0] == "Carol"
 print(f"chiffrement des mots de passe (3 algos, tirage aléatoire, aller-retour) · base {'PostgreSQL' if db.PG else 'SQLite'} · 4 tentatives par IP · inscription OK")
 
-# jeton de session : signe, expirant, falsifiable impossible, fermable
+# jeton de session : signé, expirant, falsifiable impossible, fermable
 tok = auth.make_token("alice")
 assert auth.read_token(tok) == "alice"
 assert auth.read_token(tok + "0") is None and auth.read_token("a.b.c") is None and auth.read_token("") is None
 u64, exp, jti, sig = tok.split(".")
-assert auth.read_token(f"{u64}.{int(exp) + 999999}.{jti}.{sig}") is None                              # date prolongee a la main
-assert auth.read_token(tok, now=_time.time() + auth.SESSION_SECONDS + 5) is None               # expire
+assert auth.read_token(f"{u64}.{int(exp) + 999999}.{jti}.{sig}") is None                              # date prolongée à la main
+assert auth.read_token(tok, now=_time.time() + auth.SESSION_SECONDS + 5) is None               # expiré
 assert auth.read_token(auth.make_token("bob")) is None                                          # compte inexistant
 auth.revoke_token(tok)
 assert auth.read_token(tok) is None
@@ -731,13 +815,11 @@ for _ in range(40):
     assert "answer" not in ch and "text" not in ch and "slot" not in ch and "secret" not in ch, ch.keys()
 assert seen == set(captcha.KINDS), seen
 last = captcha.new_challenge()["kind"]
-assert all(captcha.new_challenge(exclude=last)["kind"] != last for _ in range(30))              # jamais deux fois la meme sorte
-# Donne la bonne reponse d'un captcha (via le back-door de test) et, si wait=True,
-# vieillit artificiellement le defi pour passer le controle « trop rapide ».
+assert all(captcha.new_challenge(exclude=last)["kind"] != last for _ in range(30))              # jamais deux fois la même sorte
 def solved(ch, answer=None, wait=True):
     a = captcha._answer_for_tests(ch["id"])
     if wait:
-        captcha._store[ch["id"]]["born"] -= 60                                                # « le temps a passe »
+        captcha._store[ch["id"]]["born"] -= 60                                                # « le temps a passé »
     return answer if answer is not None else (a["slot"] if a["kind"] == "shuffle" else a["text"])
 for k in captcha.KINDS:
     while True:
@@ -749,7 +831,7 @@ for k in captcha.KINDS:
     assert captcha.verify(ch["id"], "x", nonce) == "unknown"                                      # usage unique
     ch = captcha.new_challenge(); nonce = captcha.solve_pow(ch["pow"]["challenge"], ch["pow"]["bits"])
     bad = solved(ch, "ZZZZ" if captcha._answer_for_tests(ch["id"])["kind"] != "shuffle" else 99)
-    assert captcha.verify(ch["id"], bad, nonce) == "wrong"                                        # mauvaise reponse : detruit aussi
+    assert captcha.verify(ch["id"], bad, nonce) == "wrong"                                        # mauvaise réponse : détruit aussi
     assert captcha.verify(ch["id"], bad, nonce) == "unknown"
 ch = captcha.new_challenge(); good = solved(ch)
 assert captcha.verify(ch["id"], good, 0) == "pow"                                               # sans travail
@@ -757,19 +839,17 @@ ch = captcha.new_challenge(); good = solved(ch, wait=False); nonce = captcha.sol
 assert captcha.verify(ch["id"], good, nonce) == "fast"                                         # plus vite qu'un humain
 ch = captcha.new_challenge(); good = solved(ch)
 assert captcha.verify(ch["id"], good, 0, now=_time.time() + captcha.TTL + 5) == "expired"
-ch = captcha.new_challenge(); assert captcha.discard(ch["id"]) and not captcha.discard(ch["id"]) and captcha.verify(ch["id"], "x", 0) == "unknown"   # abandonne = detruit
+ch = captcha.new_challenge(); assert captcha.discard(ch["id"]) and not captcha.discard(ch["id"]) and captcha.verify(ch["id"], "x", 0) == "unknown"   # abandonné = détruit
 assert captcha.new_challenge(extra_bits=3)["pow"]["bits"] == captcha.POW_BASE_BITS + 3
 assert captcha.new_challenge(extra_bits=99)["pow"]["bits"] == captcha.POW_MAX_BITS == captcha.POW_BASE_BITS + 6
 print("3 captchas : réponse jamais envoyée · usage unique · expiration · preuve de travail · trop rapide OK")
 
-# l'API : fermee sans session, ouverte avec
+# l'API : fermée sans session, ouverte avec
 anon = TestClient(app)
 assert anon.get("/api/history").status_code == 401 and anon.post("/api/cipher", json={}).status_code == 401
 assert anon.get("/api/health").status_code == 200
 st = anon.get("/api/auth/status").json()
 assert st["authenticated"] is False and st["auth_required"] is True and st["configured"] is True
-# Effectue une connexion complete via l'API : recupere un captcha, resout sa preuve
-# de travail, puis poste /api/auth/login. Renvoie la reponse HTTP.
 def login(cl, user=PW and "alice", pwd=PW, answer=None, human=None, nonce_ok=True, wait=True):
     chj = cl.get("/api/auth/captcha").json()["challenge"]
     nonce = captcha.solve_pow(chj["pow"]["challenge"], chj["pow"]["bits"]) if nonce_ok else 0
@@ -779,7 +859,7 @@ def login(cl, user=PW and "alice", pwd=PW, answer=None, human=None, nonce_ok=Tru
 r = login(anon, answer="ZZZZ" if False else None, pwd="mauvais")
 assert r.status_code == 401 and r.json()["error"] == "credentials" and "incorrect" in r.json()["message"]
 r2 = login(anon, user="inconnu")
-assert r2.status_code == 401 and r2.json()["message"] == r.json()["message"]                  # meme message : pas d'indice sur les noms
+assert r2.status_code == 401 and r2.json()["message"] == r.json()["message"]                  # même message : pas d'indice sur les noms
 r = anon.post("/api/auth/login", json={"username": "alice", "password": PW, "captcha_id": "nimporte", "answer": "x", "nonce": 1,
                                        "human": {"ms": 4000, "events": 9}})
 assert r.status_code == 400 and r.json()["reason"] == "unknown"
@@ -793,16 +873,16 @@ assert "HttpOnly" in ck and "SameSite=lax" in ck and "tp_session=" in ck, ck
 assert anon.get("/api/history").status_code == 200
 assert anon.get("/api/auth/status").json()["user"] == "alice"
 anon.post("/api/auth/logout")
-assert anon.get("/api/history").status_code == 401                                              # session fermee
+assert anon.get("/api/history").status_code == 401                                              # session fermée
 stolen = TestClient(app); stolen.cookies.set("tp_session", tok := auth.make_token("alice"))
 assert stolen.get("/api/history").status_code == 200
 auth.revoke_token(tok)
-assert stolen.get("/api/history").status_code == 401                                            # jeton revoque
+assert stolen.get("/api/history").status_code == 401                                            # jeton révoqué
 forged = TestClient(app); forged.cookies.set("tp_session", "YWxpY2U.9999999999.aabbcc.deadbeef")
 assert forged.get("/api/history").status_code == 401
 print("API fermée sans session · cookie HttpOnly · déconnexion · jeton révoqué/falsifié refusés OK")
 
-# trop d'essais : 4 mots de passe errones → compte bloque, meme avec le bon mot de passe
+# trop d'essais : 4 mots de passe erronés → compte bloqué, même avec le bon mot de passe
 auth.reset_limits()
 bf = TestClient(app)
 got = []
@@ -813,23 +893,22 @@ for i in range(3):
 assert got == [3, 2, 1], got
 r = login(bf, pwd="faux4")                                                                     # la 4e erreur bloque
 assert r.status_code == 423 and r.json()["error"] == "blocked", r.text
-r = login(bf, pwd=PW)                                                                          # meme avec le BON mot de passe
+r = login(bf, pwd=PW)                                                                          # même avec le BON mot de passe
 assert r.status_code == 423 and r.json()["error"] == "blocked", r.text
-assert db.is_attempt_blocked("alice", "testclient")                                             # bloque pour l'IP du TestClient
-r = login(bf, user="inconnu", pwd="x")                                                          # nom inconnu : meme parcours
+assert db.is_attempt_blocked("alice", "testclient")                                             # bloqué pour l'IP du TestClient
+r = login(bf, user="inconnu", pwd="x")                                                          # nom inconnu : même parcours
 assert r.status_code == 401 and r.json()["remaining"] == 3
 auth.reset_limits()                                                                            # (la limite par IP est un autre garde-fou)
-# une AUTRE adresse (X-Forwarded-For) n'est pas bloquee : elle peut se connecter avec le bon mot de passe
+# une AUTRE adresse (X-Forwarded-For) n'est pas bloquée : elle peut se connecter avec le bon mot de passe
 other = TestClient(app, headers={"X-Forwarded-For": "5.6.7.8"})
 assert login(other).status_code == 200
 other.post("/api/auth/logout")
-assert db.unlock("alice") and login(bf).status_code == 200                                      # --unlock debloque TOUTES les IP : la connexion marche aussi pour bf
+assert db.unlock("alice") and login(bf).status_code == 200                                      # --unlock débloque TOUTES les IP : la connexion marche aussi pour bf
 print("blocage après", auth.MAX_ATTEMPTS, "mots de passe erronés, PAR IP (une autre IP n'est pas affectée) OK")
 
-# inscription par l'API : defi + regles du mot de passe + doublon, puis connexion
+# inscription par l'API : défi + règles du mot de passe + doublon, puis connexion
 auth.reset_limits()
 rc = TestClient(app)
-# Meme principe que login(), mais poste /api/auth/register (inscription).
 def register(cl, user, pwd, human=None):
     chj = cl.get("/api/auth/captcha").json()["challenge"]
     nonce = captcha.solve_pow(chj["pow"]["challenge"], chj["pow"]["bits"])
@@ -839,12 +918,12 @@ def register(cl, user, pwd, human=None):
 r = register(rc, "bob", "faible")
 assert r.status_code == 400 and r.json()["error"] == "policy" and "au moins" in r.json()["message"], r.text
 r = register(rc, "bob", "Abcdef1!", human={"ms": 100, "events": 0})
-assert r.status_code == 400 and r.json()["reason"] == "robot"                                   # meme garde-fou que la connexion
+assert r.status_code == 400 and r.json()["reason"] == "robot"                                   # même garde-fou que la connexion
 r = register(rc, "bo", "Abcdef1!")
 assert r.status_code == 400 and r.json()["error"] == "username"
 r = register(rc, "bob", "Abcdef1!")
 assert r.status_code == 201 and r.json()["user"] == "bob" and "set-cookie" not in r.headers, r.text
-assert register(rc, "BOB", "Abcdef1!").status_code == 409                                       # doublon (casse ignoree)
+assert register(rc, "BOB", "Abcdef1!").status_code == 409                                       # doublon (casse ignorée)
 assert rc.get("/api/history").status_code == 401                                                # s'inscrire ne connecte pas
 assert login(rc, user="bob", pwd="Abcdef1!").status_code == 200 and rc.get("/api/history").status_code == 200
 assert auth.decipher(db.get_user("bob")) == "Abcdef1!"

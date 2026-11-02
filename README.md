@@ -13,8 +13,9 @@ chiffré sont enfermés avec la clé publique du destinataire ; lui seul les
 relit avec sa clé privée, puis déchiffre.
 
 - **Backend : Python (FastAPI)** — toute la logique (algorithmes, attaques,
-  HMAC) est en Python, lisible par toute l'équipe. Le backend renvoie aussi la
-  *trace des étapes*, que le front anime.
+  HMAC) est en Python, lisible par toute l'équipe ; seules les deux boucles
+  d'attaque sont en C pour la vitesse (voir plus bas). Le backend renvoie aussi
+  la *trace des étapes*, que le front anime.
 - **Frontend : React + TypeScript (Vite)** — l'interface et les animations.
 
 ```
@@ -23,19 +24,24 @@ tp_app/
 │   ├── encryption.py     # César, Playfair, Hill (Partie 1)
 │   ├── traces.py         # étapes d'animation (dérivées des chiffrements)
 │   ├── rsa_crypto.py     # RSA complet : Miller-Rabin, n, φ(n), e, d (Partie 2)
-│   ├── passwords.py      # attaques + protection (Partie 3)
-│   ├── integrity.py      # HMAC-SHA256 (Partie 4)
-│   ├── auth.py           # comptes (PBKDF2), sessions signées, limitation des essais
+│   ├── passwords.py      # protection des mots de passe (Partie 3)
+│   ├── attacks.py        # lance / arrête / suit les attaques (force brute, dictionnaire)
+│   ├── native_attacks.py # pont ctypes vers native/attacks.c (les deux boucles d'attaque en C)
+│   ├── native/           # attacks.c (+ libattacks.so compilée)
+│   ├── dictionnaires/    # listes de mots pour l'attaque par dictionnaire
+│   ├── integrity.py      # HMAC-SHA256 + chiffrement de A → B (Partie 4)
+│   ├── auth.py           # comptes (mots de passe chiffrés), sessions signées, blocage
 │   ├── captcha.py        # les 3 défis anti-robot + preuve de travail
-│   ├── make_user.py      # créer / lister / supprimer un compte
-│   ├── users.json        # les comptes (mots de passe hachés, jamais en clair)
+│   ├── db.py             # base des comptes : SQLite en local, PostgreSQL (Neon) en production
+│   ├── storage.py        # historiques et conversation A↔B (fichiers JSON dans backend/data/)
+│   ├── make_user.py      # créer / lister / débloquer / supprimer un compte
 │   ├── main.py           # API FastAPI + service du front buildé
 │   ├── _selftest.py      # tests du backend (python _selftest.py)
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/…             # React/TypeScript (src/components/auth = page de connexion)
 │   └── dist/             # build de production (déjà inclus)
-└── launcher/             # installateur + raccourci « appli de bureau » (Windows / Mac)
+└── Dockerfile            # recette utilisée par Render (build du front + backend)
 ```
 
 ## Lancer l'application
@@ -80,25 +86,76 @@ cd frontend
 npm run build      # régénère frontend/dist
 ```
 
+## Partie 3 — Attaques sur mots de passe
+
+La force brute (000 → zzz, en incrémentant de droite à gauche) et l'attaque par
+dictionnaire passent par `attacks.py`, qui démarre un fil de travail et publie la
+progression. Les deux boucles de recherche tournent en **C** (`native/attacks.c`,
+appelé par `native_attacks.py` via ctypes) : bien plus rapides, et interruptibles
+(le bouton Stop fonctionne vraiment). Si le C n'est pas disponible (ni `gcc`, ni
+`libattacks.so` compatible), le backend retombe automatiquement sur des boucles
+Python — plus lentes, mais tout fonctionne — et il affiche la raison au démarrage.
+
+## Partie 4 — Intégrité (HMAC-SHA256)
+
+Le chiffrement cache un message mais ne détecte pas qu'on l'a modifié en route.
+Un **HMAC** ajoute une étiquette calculée avec le message *et* une clé secrète
+partagée.
+
+- **A** écrit un message. Avec l'option *Chiffrement*, il le chiffre vraiment
+  (César, Playfair ou Hill : **au hasard par défaut**, ou l'algorithme et la clé
+  qu'il choisit dans sa carte), puis calcule l'étiquette sur ce qui voyage :
+  **le chiffré** (ou le message lui-même s'il voyage en clair).
+- Sur le canal voyage un **paquet** : le chiffré, l'algorithme, la clé et
+  l'étiquette. **C**, l'attaquant, peut tout lire et modifier le chiffré, mais il
+  n'a jamais la clé HMAC : il ne peut pas fabriquer une étiquette valide pour son
+  message modifié.
+- **B** recalcule l'étiquette sur le chiffré reçu *avant* de déchiffrer et la
+  compare à celle de A. Sans la protection, B affiche tout sans rien vérifier.
+- Le **taux de changement de l'étiquette** (part des 64 caractères qui diffèrent
+  entre l'étiquette de A et celle recalculée par B) est le chiffre clé : 0 % si le
+  message est intact, environ 94 % dès qu'on le modifie (effet d'avalanche de
+  SHA-256 : le taux ne grandit pas avec la taille de la modification, et c'est voulu).
+
+Pourquoi l'étiquette est calculée sur le chiffré et non sur le clair : avec
+Playfair, une lettre ajoutée en fin de chiffré est ignorée au déchiffrement, donc
+B retrouvait le même clair et ne voyait rien. Signé sur le chiffré, le moindre
+caractère modifié change l'étiquette.
+
+## Historiques
+
+Chaque partie garde un historique (chiffrements, attaques sur mots de passe,
+envois A → B avec leur taux de changement) ainsi que la conversation A↔B, dans
+des fichiers JSON de `backend/data/` (ou du dossier `DATA_DIR`). Sur Render, le
+disque est effacé à chaque redémarrage : ces historiques repartent de zéro, alors
+que les comptes (en base) sont conservés.
+
 ## Connexion et comptes
 
 L'application est protégée par une **page de connexion** : identifiant + mot de
 passe, puis un **défi anti-robot** (un cadenas qui se déverrouille à la fin).
-Il n'y a pas d'inscription : les comptes sont créés par toi.
+On peut créer un compte depuis la page de connexion (8 caractères au moins, une
+majuscule, une minuscule, un chiffre et un symbole) ou en ligne de commande :
 
 ```bash
 cd backend
 python make_user.py billy            # crée / change le mot de passe (demandé sans affichage)
-python make_user.py --list           # liste les comptes
+python make_user.py --list           # liste les comptes (algorithme, état)
+python make_user.py billy --unlock   # débloque un compte sur toutes les IP
 python make_user.py billy --delete   # supprime un compte
-python make_user.py billy --print    # affiche seulement la ligne à copier dans APP_USERS
 ```
 
-- Les mots de passe sont **hachés** (PBKDF2-HMAC-SHA256, 600 000 itérations, sel
-  aléatoire) dans `backend/users.json`. Le clair n'est écrit nulle part.
+- Règle du TP : le mot de passe n'est **ni stocké en clair, ni haché** — il est
+  **chiffré** avec l'un des trois chiffrements du projet (César, Playfair ou Hill,
+  tiré au hasard, avec une clé aléatoire). Les comptes sont dans une base : SQLite
+  (`backend/data/users.db`) en local, PostgreSQL (ex. Neon) si `DATABASE_URL` est
+  définie. Ce choix a des limites (la clé est stockée avec le mot de passe) : voir
+  l'en-tête de `auth.py`.
 - La session est un **cookie signé** (HttpOnly, SameSite=Lax, Secure en https),
   valable 12 h, révocable à la déconnexion.
-- **Limitation des essais** : 5 échecs, puis attente de 15 s qui double jusqu'à 5 min.
+- **Blocage** : après 4 mots de passe erronés de suite depuis une même IP, ce
+  couple (compte, IP) est bloqué jusqu'à `make_user.py nom --unlock`. Une autre IP
+  n'est pas affectée (sinon on pourrait bloquer le vrai propriétaire à distance).
 - **Trois défis qui changent à chaque ouverture, à chaque erreur et à chaque
   fermeture**, jamais deux fois le même type de suite :
   *Mouvement* (des caractères visibles seulement dans le déplacement de points),
@@ -115,32 +172,21 @@ python make_user.py billy --print    # affiche seulement la ligne à copier dans
 | Variable | Rôle |
 |---|---|
 | `SECRET_KEY` | clé qui signe les sessions. **À définir** (longue, aléatoire) : sans elle, tout le monde est déconnecté à chaque redémarrage. |
-| `APP_USERS` | comptes au format `nom:hash;nom2:hash2` (hash obtenu avec `python make_user.py nom --print`). Prioritaire sur `users.json`. |
+| `DATABASE_URL` | base PostgreSQL (ex. Neon) pour les comptes. **À définir sur Render** : le disque y est effacé à chaque redémarrage, une base SQLite perdrait tous les comptes. Sans elle, SQLite est utilisé. |
+| `USERS_DB` | emplacement du fichier SQLite (par défaut `backend/data/users.db`). |
+| `DATA_DIR` | dossier des historiques JSON (par défaut `backend/data/`). |
 | `TP_POW_BITS` | difficulté de base de la preuve de travail (19 par défaut). |
 | `TP_AUTH_OFF=1` | **développement seulement** : désactive la connexion. |
 
-`Pillow` est ajouté aux dépendances (`requirements.txt`) : il dessine les défis.
+`Pillow` (qui dessine les défis) et `psycopg` (PostgreSQL) sont dans `requirements.txt`.
 
-## Installer comme une appli de bureau (Windows / Mac)
-
-Dans le dossier `launcher/` :
-
-- **Windows** : double-clique **`Installer.bat`**.
-- **macOS** : double-clique **`Installer.command`** (si macOS refuse : clic droit → Ouvrir).
-
-L'installateur crée un environnement Python privé (`.venv`), installe les
-dépendances, propose de créer ton compte, puis crée un raccourci **« TP Sécurité »**
-(bureau + menu Démarrer sous Windows ; Applications + bureau sous macOS). Le raccourci
-ouvre l'appli dans **sa propre fenêtre** (mode appli de Brave, Chrome ou Edge,
-sans barre d'adresse, avec un profil séparé) ; fermer la fenêtre arrête le serveur,
-qui n'écoute que sur ton ordinateur (127.0.0.1). Il faut Python 3.9+ (l'installateur
-propose de l'installer s'il manque). Détails : `launcher/LISEZ-MOI.txt`.
+Render construit l'application avec le `Dockerfile` : `npm ci` + `npm run build` pour le front, puis le backend Python.
 
 ## Versions
 
 - **React 18.3.1** (avec react-dom 18.3.1)
 - **Vite 5.4.11**, **TypeScript 5.6.3**, `@vitejs/plugin-react 4.3.4`
-- **Python 3.10+**, FastAPI 0.115.5, uvicorn 0.32.1, Pillow 10.1+
+- **Python 3.10+**, FastAPI 0.115.5, uvicorn 0.32.1, Pillow 10.1+, psycopg 3.2.3
 
 Pour installer React dans un projet neuf : `npm install react@18.3.1 react-dom@18.3.1`.
 Ici, un simple `npm install` dans `frontend/` installe tout (versions figées
@@ -155,6 +201,8 @@ python3 _selftest.py
 
 Vérifie les 3 chiffrements (aller-retour + traces), RSA (exemple de manuel,
 Miller-Rabin, génération de 32 à 2048 bits, coffre fermé / ouvert, mauvaise clé
-privée refusée, échange complet A → B par l'API), les attaques mots de passe, le
-hachage PBKDF2 et la détection d'altération HMAC, puis la connexion (sessions,
-jeton révoqué, 3 captchas, preuve de travail, verrouillage après 5 échecs).
+privée refusée, échange complet A → B par l'API), les attaques mots de passe
+(Python et C), l'intégrité HMAC (détection d'altération, y compris une lettre
+ajoutée à un chiffré Playfair, algorithme et clé choisis par A, taux de changement
+de l'étiquette, historique), puis la connexion (comptes, sessions, jeton révoqué,
+3 captchas, preuve de travail, blocage après 4 échecs par IP).

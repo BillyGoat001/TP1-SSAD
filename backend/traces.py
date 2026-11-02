@@ -1,29 +1,16 @@
-# -*- coding: utf-8 -*-
-"""
-Step-by-step traces for the animations (Part 1).
-
-The ciphers themselves live in encryption.py. Here, for each algorithm, we
-rebuild the SAME computation but record every step as plain data (which cell to
-highlight, which shift to apply, which multiplication to show). The React
-frontend only reads this data and animates it — all the real logic stays in
-Python, so the team understands the algorithms from a single source.
-
-Each function returns a dict with "kind", "result" and "steps" (plus whatever
-the animation needs: the alphabet rows, the Playfair grid, the Hill matrix...).
-"""
-
 import encryption as en
 
 A = ord("A")
 
 
-# ---------------------------------------------------------------- Caesar ----
+# Trace du chiffre de César : construit les deux rangées d'alphabet (entrée /
+# sortie) et un pas par caractère. Déchiffrer revient à chiffrer dans le sens
+# opposé, d'où le décalage effectif `eff` inversé.
 def caesar_trace(message, shift, direction, operation):
-    """Two alphabet rows (input / output) and one step per character."""
     if operation == "encrypt":
         eff = -shift if direction == "left" else shift
         result = en.caesar_encrypt(message, shift, direction)
-    else:  # decrypt = encrypt with the opposite direction
+    else:
         eff = shift if direction == "left" else -shift
         result = en.caesar_decrypt(message, shift, direction)
     eff %= 26
@@ -52,9 +39,10 @@ def caesar_trace(message, shift, direction, operation):
     }
 
 
-# -------------------------------------------------------------- Playfair ----
+# Trace de Playfair : la grille 5x5 et un pas par digramme, avec la règle
+# appliquée (même ligne, même colonne, ou rectangle) et les positions avant /
+# après. `delta` vaut -1 au déchiffrement pour parcourir la grille à l'envers.
 def playfair_trace(message, key, operation):
-    """The 5x5 grid and one step per digram, with the rule used."""
     m = en._playfair_matrix(key)
     clean = en._playfair_clean(message)
 
@@ -92,9 +80,10 @@ def playfair_trace(message, key, operation):
     return {"kind": "playfair", "grid": m, "steps": steps, "result": result}
 
 
-# ------------------------------------------------------------------ Hill ----
+# Trace de Hill : un pas par ligne de la matrice et par bloc, avec les termes du
+# produit, la somme et son modulo 26. Au déchiffrement on utilise l'inverse
+# modulaire de la matrice (lève une exception si elle n'est pas inversible).
 def hill_trace(message, matrix, operation):
-    """The matrix (or its inverse for decrypt) times each block, row by row."""
     n = len(matrix)
     if operation == "encrypt":
         use = matrix
@@ -103,10 +92,10 @@ def hill_trace(message, matrix, operation):
         while len(text) % n != 0:
             text += "X"
     else:
-        use = en.matrix_mod_inverse(matrix)  # raises if not invertible
+        use = en.matrix_mod_inverse(matrix)
         result = en.hill_decrypt(message, matrix)
         text = en._hill_clean(message)
-        while len(text) % n != 0:            # safety, normally already aligned
+        while len(text) % n != 0:
             text += "X"
 
     nums = [ord(c) - A for c in text]

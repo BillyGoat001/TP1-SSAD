@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Partie 3 — Mots de passe : attaques et protection.
 
@@ -80,7 +79,7 @@ _LANG_FILES = {
 # ordre des langues "restantes", une fois celle de l'interface et son complément
 # (français/anglais) déjà passées — du plus fourni au plus thin
 _LANG_REST_ORDER = ["allemand", "espagnol", "neerlandais", "polonais",
-                     "chinois_pinyin", "portugais", "turc", "arabe_arabizi", "italien"]
+                    "chinois_pinyin", "portugais", "turc", "arabe_arabizi", "italien"]
 
 # Repli si le dossier dictionnaires/ n'a pas encore été déposé (ancien fichier unique)
 _WORDLIST_GZ = os.path.join(os.path.dirname(__file__), "wordlist.txt.gz")
@@ -89,13 +88,12 @@ _FALLBACK = ["azerty", "motdepasse", "soleil", "123456", "password", "qwerty",
              "bonjour", "coucou", "doudou", "iloveyou", "admin", "sunshine"]
 
 # Complément ajouté à la main (ex. les PIN à 4 chiffres absents d'un dictionnaire de
-# fuites réelles — personne n'a jamais utilisé "3134" comme mot de passe en ligne,
-# mais un vrai attaquant teste quand même tout l'espace numérique en premier avant
-# le dictionnaire). Toujours lu EN DERNIER : les positions des mots déjà présents
+# fuites réelles). Toujours lu EN DERNIER : les positions des mots déjà présents
 # ailleurs (dictionary_size(), les rangs #N des tests) ne bougent jamais.
 _EXTRA_FILE = os.path.join(os.path.dirname(__file__), "dictionnaire_extra.txt")
 
 
+# Itère les mots du complément ajouté à la main (rien si le fichier n'existe pas).
 def _extra_words():
     if not os.path.exists(_EXTRA_FILE):
         return
@@ -108,22 +106,20 @@ def _extra_words():
 _dict_size = None          # taille du dictionnaire, comptée une seule fois
 
 
+# Ordre de lecture des langues : d'abord la langue de l'interface, puis l'autre de
+# français/anglais, puis le reste. L'ensemble lu est toujours le même ; seul
+# l'ordre dépend de `lang`.
 def _dict_order(lang="fr"):
-    """Ordre de lecture : d'abord le général (mots de passe les plus communs,
-    toutes langues), puis la langue de l'interface, puis l'autre de
-    français/anglais, puis le reste des langues (le total lu est toujours le
-    même quelle que soit `lang` : seul l'ORDRE change, pas l'ensemble)."""
     first_lang = "francais" if lang == "fr" else "anglais"
     second_lang = "anglais" if lang == "fr" else "francais"
     rest = [n for n in _LANG_REST_ORDER if n not in (first_lang, second_lang)]
     return [first_lang, second_lang] + rest
 
 
+# Liste ordonnée des fichiers à lire, avec leur encodage ('utf-8' pour le dossier
+# dictionnaires/, 'latin-1' pour l'ancien wordlist.txt(.gz) en repli). Renvoie []
+# si même le repli est absent (on utilise alors _FALLBACK, géré à part).
 def _dict_paths(lang="fr"):
-    """Liste ordonnée des fichiers à lire, avec leur encodage ('utf-8' pour le
-    dossier dictionnaires/, 'latin-1' pour l'ancien wordlist.txt(.gz) en repli).
-    Renvoie [] si même le repli est absent (dictionnaire minimal codé en dur,
-    voir _FALLBACK, géré à part car il n'est pas dans un fichier)."""
     if os.path.isdir(_DICT_DIR):
         paths = [os.path.join(_DICT_DIR, p) for p in _GENERAL_PARTS]
         paths += [os.path.join(_DICT_DIR, "langues", _LANG_FILES[n]) for n in _dict_order(lang)]
@@ -135,12 +131,10 @@ def _dict_paths(lang="fr"):
     return []
 
 
+# Parcourt tout le dictionnaire mot par mot, sans jamais tout charger en mémoire.
+# `lang` ne change que l'ORDRE de lecture, pas le total. Le complément
+# (_extra_words) est toujours ajouté EN DERNIER, fichier principal présent ou non.
 def _iter_words(lang="fr"):
-    """Parcourt tout le dictionnaire mot par mot, sans jamais tout charger en
-    mémoire. `lang` ('fr' ou 'en') ne change que l'ORDRE de lecture (les mots
-    de la langue de l'interface arrivent plus tôt), pas le total parcouru.
-    Le complément (_extra_words) est toujours ajouté EN DERNIER, fichier
-    principal présent ou non : les positions déjà testées ne changent jamais."""
     paths = _dict_paths(lang)
     if not paths:
         for w in _FALLBACK:
@@ -157,23 +151,23 @@ def _iter_words(lang="fr"):
     yield from _extra_words()
 
 
+# Nombre de mots du dictionnaire (compté une fois puis mémorisé) — le même quel
+# que soit `lang`.
 def dictionary_size():
-    """Nombre de mots du dictionnaire (compté une fois, puis mémorisé) — le
-    même quel que soit `lang`, seul l'ordre de lecture en dépend."""
     global _dict_size
     if _dict_size is None:
         _dict_size = sum(1 for _ in _iter_words())
     return _dict_size
 
 
-# ---------------------------------------------------------------- helpers ----
+# Taille de l'espace de recherche : nombre de caractères possibles puissance longueur.
 def keyspace(charset, length):
     return len(charset) ** length
 
 
+# (charset, longueur, libellé) d'un cas ; la longueur n'est modifiable que pour le
+# cas « complexe », et bornée à 0..64.
 def _resolve_case(case, length=None):
-    """(charset, longueur, libellé) d'un cas ; la longueur n'est modifiable que
-    pour le cas « complexe », et bornée à 0..64."""
     if case not in CASES:
         raise ValueError(f"Cas inconnu « {case} ». Utilise : {', '.join(CASES)}.")
     cfg = CASES[case]
@@ -186,25 +180,26 @@ def _resolve_case(case, length=None):
 NBSP = " "
 
 
+# Arrondit x à 2 chiffres significatifs : 1234 -> 1200 ; 0,0333 -> 0,033.
 def _round2(x):
-    """x arrondi à 2 chiffres significatifs : 1234 -> 1200 ; 0,0333 -> 0,033."""
     return float(f"{x:.2g}")
 
 
+# Formate un nombre à la française : 1.2 -> '1,2' ; 15.0 -> '15' ; 45000 -> '45 000'.
 def _num(x):
-    """Nombre à la française : 1.2 -> '1,2' ; 15.0 -> '15' ; 45000 -> '45 000'."""
     if x == int(x):
         return f"{int(x):,}".replace(",", NBSP)
     return f"{x:g}".replace(".", ",")
 
 
+# Renvoie 's' pour un pluriel (n >= 2), chaîne vide sinon.
 def _plural(n):
     return "s" if n >= 2 else ""
 
 
+# Nombre de combinaisons lisible : groupé si petit, sinon notation scientifique
+# française (3,4 × 10^15).
 def fmt_count(n):
-    """Nombre de combinaisons lisible : groupé si petit, sinon notation
-    scientifique française (3,4 × 10^15)."""
     if n < 1_000_000_000:
         return f"{n:,}".replace(",", NBSP)
     s = str(int(n))
@@ -212,8 +207,8 @@ def fmt_count(n):
     return f"{s[0]},{s[1:3]} × 10^{exp}"
 
 
+# Vitesse d'un attaquant en français : 1e10 -> '10 milliards d'essais/s'.
 def fmt_rate(r):
-    """Vitesse d'un attaquant : 1e10 -> '10 milliards d'essais/s'."""
     if r >= 1e9:
         n = _round2(r / 1e9)
         return f"{_num(n)} milliard{_plural(n)} d'essais/s"
@@ -227,12 +222,11 @@ def fmt_rate(r):
 YEAR = 31_536_000.0                  # secondes dans une année
 
 
+# (libellé français, catégorie de force) pour une durée en secondes. Une seule
+# échelle pour tout le site (les libellés courts du tableau utilisent compact=True).
+# Catégories : instant / faible / moyen / fort / inviolable. Au-delà du millénaire,
+# on passe en puissances de 10 (10^k ans) plutôt qu'en « milliards d'années ».
 def human_time(seconds, compact=False):
-    """(libellé français, catégorie de force) pour une durée en secondes.
-
-    UNE SEULE échelle pour tout le site : les phrases complètes et les libellés
-    courts du tableau (compact=True) sortent d'ici, avec les mêmes seuils.
-    Catégories : instant / faible / moyen / fort / inviolable."""
     s = seconds
     if s is None or s == float("inf"):
         return "10^100+ ans", "inviolable"
@@ -252,8 +246,6 @@ def human_time(seconds, compact=False):
     if s < YEAR:
         return f"{s / 2_592_000:.0f} mois", "moyen"
     y = s / YEAR
-    # années -> siècles -> millénaires -> puissances de 10. Pas de « milliards
-    # d'années » ni de plafond « > Univers » : au-delà, on passe en 10^k ans.
     if y < 100:
         n = round(y)
         return ("1 an" if n == 1 else f"{_num(n)} ans"), "fort"
@@ -267,8 +259,8 @@ def human_time(seconds, compact=False):
     return f"10^{k} ans", "inviolable"
 
 
+# Estimation { espace, bits, temps } pour un alphabet et une longueur donnés.
 def estimate_for(alphabet_size, length, rate=FAST_RATE):
-    """Estimation { espace, bits, temps } pour un alphabet et une longueur."""
     space = int(alphabet_size) ** int(length)
     try:
         seconds = space / rate
@@ -299,9 +291,9 @@ TABLE_ALPHABETS = [                      # (nom, détail, taille de l'alphabet)
 ]
 
 
+# Construit le tableau « durée pour épuiser l'espace » selon la longueur et le type
+# de caractères (mêmes seuils et mots que le reste du site).
 def speed_table(rate=FAST_RATE):
-    """Durée pour épuiser l'espace, selon la longueur et le type de caractères.
-    Mêmes seuils et mêmes mots que le reste du site."""
     rows = []
     for length in TABLE_LENGTHS:
         cells = []
@@ -317,9 +309,9 @@ def speed_table(rate=FAST_RATE):
     }
 
 
-# ------------------------------------------------------- politique (complexe) ----
+# Ensemble des classes de caractères présentes dans le mot de passe ('other' pour
+# ce qui est hors du jeu autorisé).
 def classes_present(password):
-    """Ensemble des classes de caractères présentes dans le mot de passe."""
     present = set()
     for ch in password:
         if ch in LOWER:
@@ -335,10 +327,10 @@ def classes_present(password):
     return present
 
 
+# Jeu de caractères RÉELLEMENT utilisé par le mot de passe (cas complexe) : un mot
+# de passe en minuscules seules donne 'a-z' (26), pas le jeu complet — la force
+# brute n'a pas à supposer des symboles absents.
 def detected_charset(target):
-    """Jeu de caractères RÉELLEMENT utilisé par le mot de passe (cas complexe).
-    Un mot de passe en minuscules seules donne 'a-z' (26), pas le jeu complet :
-    la force brute n'a pas à supposer des symboles qui ne sont pas là."""
     present = classes_present(target) - {"other"}
     parts = []
     if "lower" in present:
@@ -356,9 +348,9 @@ _CLASS_LABEL = {"lower": "une minuscule", "upper": "une majuscule",
                 "digit": "un chiffre", "symbol": "un symbole"}
 
 
+# Le mot de passe est-il valide pour ce cas / cette politique ? Renvoie
+# { valid, reasons: [...] } ; `reasons` liste ce qui manque.
 def validate(target, case, length=None, rules=None):
-    """Le mot de passe est-il valide pour ce cas / cette politique ?
-    Renvoie { valid, reasons: [...] } ; `reasons` liste ce qui manque."""
     charset, fixed_len, _label = _resolve_case(case, length)
     reasons = []
 
@@ -387,11 +379,10 @@ def validate(target, case, length=None, rules=None):
     return {"valid": not reasons, "reasons": reasons}
 
 
-# -------------------------------------------------------------- force brute ----
+# Numéro d'essai (1-based) auquel la force brute, parcourant les combinaisons dans
+# l'ordre, tomberait sur la cible. None si la cible n'est pas une combinaison
+# valide de ce charset / cette longueur.
 def rank_of(target, charset, length):
-    """Numéro d'essai (1-based) auquel la force brute, parcourant les
-    combinaisons dans l'ordre, tomberait sur la cible. None si la cible n'est
-    pas une combinaison valide de ce charset / cette longueur."""
     if len(target) != length:
         return None
     base = len(charset)
@@ -404,20 +395,15 @@ def rank_of(target, charset, length):
     return r + 1
 
 
+# Prépare la force brute : valide la cible, donne l'espace, l'estimation pire-cas
+# et le rang de la cible (le front anime la progression). Pour un petit espace on
+# parcourt réellement ; pour l'espace complexe on calcule le rang exact. `limit`
+# borne les essais ; `know_composition` restreint le jeu aux classes réellement
+# présentes (sinon pire cas, jeu complet).
 def brute_force(target, case, length=None, limit=None, rules=None, know_composition=True):
-    """Prépare la force brute : valide la cible, donne l'espace, l'estimation
-    pire-cas, et le rang exact de la cible (le front anime la progression).
-
-    `limit` : si une limite de tentatives est active, l'attaque s'arrête à ce
-    nombre d'essais ; craqué seulement si le rang y est inférieur ou égal.
-    `know_composition` : si vrai (et cas complexe), l'attaquant connaît les
-    classes réellement présentes et restreint son jeu de caractères ; sinon il
-    suppose le pire cas (jeu complet)."""
     charset, length, label = _resolve_case(case, length)
     check = validate(target, case, length, rules)
 
-    # cas complexe : l'attaquant qui CONNAÎT la composition restreint son jeu de
-    # caractères (minuscules seules -> 26, pas 86). Sinon il garde le jeu complet.
     if case == "complexe" and know_composition:
         detected = detected_charset(target)
         if detected:
@@ -476,10 +462,9 @@ def brute_force(target, case, length=None, limit=None, rules=None, know_composit
     }
 
 
-# -------------------------------------------------------------- dictionnaire ----
+# Lit le dictionnaire mot par mot jusqu'à la cible (ou la limite de tentatives).
+# Renvoie la position trouvée et la taille totale.
 def dictionary_attack(target, limit=None, lang="fr"):
-    """Lit le dictionnaire mot par mot jusqu'à la cible (ou la limite de
-    tentatives). Renvoie la position trouvée et la taille totale."""
     size = dictionary_size()
     pos = 0
     for w in _iter_words(lang):
@@ -496,7 +481,7 @@ def dictionary_attack(target, limit=None, lang="fr"):
             "limit": int(limit) if limit is not None else None}
 
 
-# ------------------------------------------------------------- hypothèses ----
+# Hypothèses d'attaque exposées à l'interface (vitesse de référence, seuil de boucle réelle).
 def assumptions():
     return {
         "fastRate": FAST_RATE,

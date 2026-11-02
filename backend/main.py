@@ -707,12 +707,6 @@ def _gate(req, request: Request):
     anti-robot (usage unique), comportement humain. Renvoie une réponse d'erreur, ou None
     si tout est bon."""
     ip = _ip(request)
-    wait = auth.locked_for("ip:" + ip)
-    if wait:
-        captcha.verify(req.captcha_id, None)                       # le défi est détruit quand même
-        return JSONResponse({"ok": False, "error": "locked", "retry_after": wait,
-                             "message": f"Trop de tentatives. Réessaie dans {wait} s."},
-                            status_code=429, headers={"Retry-After": str(wait)})
     # 1) le défi (usage unique)
     why = captcha.verify(req.captcha_id, req.answer, req.nonce)
     if why != "ok":

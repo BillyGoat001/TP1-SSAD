@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Partie 2 — Échange de clés avec RSA (implémentation complète, sans bibliothèque).
 
@@ -42,10 +41,10 @@ _SMALL_PRIMES = [p for p in range(3, 2000, 2)
                  if all(p % k for k in range(3, int(p ** 0.5) + 1, 2))]
 
 
-# ------------------------------------------------------------ arithmétique ----
+# Test de primalité de Miller-Rabin : faux pour un composé, vrai pour un premier
+# (erreur possible <= 4^-rounds, négligeable avec 40 témoins). Un filtre par les
+# petits premiers élimine d'abord la plupart des composés sans calcul coûteux.
 def is_probable_prime(n, rounds=40):
-    """Test de Miller-Rabin : faux pour un composé, vrai pour un premier
-    (erreur possible ≤ 4^-rounds, négligeable avec 40 témoins)."""
     if n < 2:
         return False
     if n in (2, 3):
@@ -76,9 +75,9 @@ def is_probable_prime(n, rounds=40):
     return True
 
 
+# Nombre premier aléatoire d'exactement `bits` bits. Les deux bits de poids fort
+# sont forcés à 1 pour que le produit n = p·q ait pile 2×bits bits.
 def random_prime(bits):
-    """Nombre premier aléatoire d'exactement `bits` bits.
-    Les deux bits de poids fort sont forcés à 1 : ainsi n = p·q a pile 2×bits bits."""
     top = (1 << (bits - 1)) | (1 << (bits - 2))
     while True:
         candidate = secrets.randbits(bits) | top | 1   # impair, bonne taille
@@ -86,8 +85,8 @@ def random_prime(bits):
             return candidate
 
 
+# Algorithme d'Euclide étendu : renvoie (g, x, y) avec a·x + b·y = g = pgcd(a, b).
 def egcd(a, b):
-    """Algorithme d'Euclide étendu : renvoie (g, x, y) avec a·x + b·y = g = pgcd(a, b)."""
     x0, y0, x1, y1 = 1, 0, 0, 1
     while b:
         q, a, b = a // b, b, a % b
@@ -96,18 +95,18 @@ def egcd(a, b):
     return a, x0, y0
 
 
+# Inverse de a modulo m (existe seulement si pgcd(a, m) = 1).
 def mod_inverse(a, m):
-    """Inverse de a modulo m (existe seulement si pgcd(a, m) = 1)."""
     g, x, _ = egcd(a % m, m)
     if g != 1:
         raise ValueError(f"{a} n'a pas d'inverse modulo {m}.")
     return x % m
 
 
-# ------------------------------------------------------- paire de clés RSA ----
+# Génère une paire de clés RSA de `bits` bits. Renvoie tous les nombres (p, q, φ
+# et d restent secrets : seuls e et n sont publics). Rejette un tirage où e n'est
+# pas premier avec φ(n).
 def generate_keypair(bits=DEFAULT_BITS):
-    """Génère une paire de clés RSA de `bits` bits. Renvoie tous les nombres
-    (p, q, φ et d restent secrets : seuls e et n sont publics)."""
     if bits not in KEY_SIZES:
         raise ValueError(f"Taille de clé non prise en charge ({bits} bits).")
     start = time.perf_counter()
@@ -119,7 +118,7 @@ def generate_keypair(bits=DEFAULT_BITS):
             continue
         phi = (p - 1) * (q - 1)
         if math.gcd(PUBLIC_EXPONENT, phi) != 1:
-            continue                    # e doit être premier avec φ(n) : on retire p et q
+            continue
         n = p * q
         d = mod_inverse(PUBLIC_EXPONENT, phi)
         break
@@ -131,14 +130,13 @@ def generate_keypair(bits=DEFAULT_BITS):
     }
 
 
-# ---------------------------------------------------- chiffrement par blocs ----
+# Octets par bloc : assez peu pour que chaque bloc m vérifie m < n.
 def block_size(n):
-    """Octets par bloc : assez peu pour que chaque bloc m vérifie m < n."""
     return (n.bit_length() - 1) // 8
 
 
+# Chiffre un texte avec la clé publique (e, n) : c = m^e mod n pour chaque bloc.
 def encrypt_text(text, e, n):
-    """Chiffre un texte avec la clé publique (e, n) : c = m^e mod n pour chaque bloc."""
     data = text.encode("utf-8")
     k = block_size(n)
     if k < 1:
@@ -151,9 +149,9 @@ def encrypt_text(text, e, n):
     return {"blockBytes": k, "blocks": blocks}
 
 
+# Déchiffre avec la clé privée (d, n) : m = c^d mod n pour chaque bloc, puis
+# rassemble les octets en texte (erreur si ce n'est pas la bonne clé privée).
 def decrypt_blocks(cipher_blocks, d, n):
-    """Déchiffre avec la clé privée (d, n) : m = c^d mod n pour chaque bloc,
-    puis rassemble les octets en texte."""
     blocks, data = [], b""
     for c in cipher_blocks:
         if not 0 <= c < n:
@@ -169,9 +167,10 @@ def decrypt_blocks(cipher_blocks, d, n):
     return {"blocks": blocks, "text": text}
 
 
-# ------------------------------------- le « mode d'emploi » : algo + clé ----
+# Écrit l'algo et sa clé sous forme de texte compact, prêt à être chiffré par RSA.
+# Pour Hill, vérifie que la matrice est inversible mod 26 (sinon B ne pourrait pas
+# déchiffrer).
 def params_to_text(algo, shift=None, direction="right", key=None, matrix=None):
-    """Écrit l'algo et sa clé sous forme de texte compact, prêt à être chiffré."""
     if algo == "caesar":
         if shift is None or shift < 0:
             raise ValueError("Le décalage César doit être un entier positif.")
@@ -186,7 +185,7 @@ def params_to_text(algo, shift=None, direction="right", key=None, matrix=None):
     if algo == "hill":
         m = en.validate_matrix(matrix)
         try:
-            en.matrix_mod_inverse(m)    # le destinataire doit pouvoir déchiffrer
+            en.matrix_mod_inverse(m)
         except ValueError:
             raise ValueError("Matrice non inversible modulo 26 : le destinataire ne "
                              "pourrait pas déchiffrer. Choisis une autre matrice.")
@@ -194,8 +193,9 @@ def params_to_text(algo, shift=None, direction="right", key=None, matrix=None):
     raise ValueError(f"Algorithme inconnu « {algo} ».")
 
 
+# Relit le mode d'emploi sorti du coffre : {algo, shift/direction | key | matrix}.
+# Lève une erreur si le texte est illisible (mauvaise clé privée).
 def text_to_params(text):
-    """Relit le mode d'emploi sorti du coffre : {algo, shift/direction | key | matrix}."""
     try:
         parts = text.split("|")
         if parts[0] == "caesar" and len(parts) == 3 and parts[2] in ("right", "left"):
@@ -212,8 +212,8 @@ def text_to_params(text):
     raise ValueError("Mode d'emploi illisible : le coffre n'a pas été ouvert avec la bonne clé privée.")
 
 
+# Convertit en entier un grand nombre reçu en texte (JSON ne garde pas leur précision).
 def parse_int(value, name):
-    """Les grands nombres voyagent en texte (JSON ne garde pas leur précision)."""
     value = str(value).strip()
     if not value.isdigit():
         raise ValueError(f"Valeur invalide pour {name}.")

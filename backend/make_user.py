@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Crée ou change un compte de connexion (base SQLite backend/data/users.db).
 
@@ -21,6 +20,10 @@ import auth
 import db
 
 
+# Point d'entrée CLI : aiguille selon les drapeaux (--list, --delete, --unlock)
+# ou, par défaut, demande deux fois le mot de passe et enregistre le compte.
+# Renvoie le code de sortie du processus (0 = succès). Le docstring du module
+# ci-dessus sert de texte d'aide, il est affiché quand aucun nom n'est donné.
 def main(argv: list) -> int:
     args = [a for a in argv if not a.startswith("--")]
     flags = {a for a in argv if a.startswith("--")}

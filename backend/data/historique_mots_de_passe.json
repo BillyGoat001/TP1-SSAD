@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "next_id": 77,
+  "next_id": 79,
   "entries": [
     {
       "attack": "brute",
@@ -221,6 +221,28 @@
       "timeSec": 0.7321820259094238,
       "id": 76,
       "at": "2026-11-01T21:58:47+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "zzzzzz",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 308915776.0,
+      "timeSec": 0.868779182434082,
+      "id": 77,
+      "at": "2026-11-02T01:46:08+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "binaire",
+      "password": "101",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 6.0,
+      "timeSec": 0.0004911422729492188,
+      "id": 78,
+      "at": "2026-11-02T11:17:21+00:00"
     }
   ]
 }

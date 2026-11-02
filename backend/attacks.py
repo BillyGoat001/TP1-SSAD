@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Exécution RÉELLE des attaques, en tâche de fond.
 
@@ -6,22 +5,12 @@ Avant ce module, la force brute « cas complexe » et le dictionnaire étaient
 calculés d'un coup (rang exact par formule, ou boucle Python qui finit en une
 poignée de secondes) : le serveur répondait tout de suite, et la barre de
 progression du frontend n'était qu'une ANIMATION rejouée après coup, à la
-vitesse fictive d'un attaquant (10 milliards d'essais/s) — invisible dès que
-le nombre d'essais réels était petit face à cette vitesse.
+vitesse fictive d'un attaquant (10 milliards d'essais/s).
 
 Ici, un clic démarre un vrai thread qui boucle à la vitesse RÉELLE de cette
-machine :
-  - la boucle elle-même tourne en C compilé (native_attacks.py / native/attacks.c)
-    quand gcc est disponible — bien plus rapide qu'en pur Python — avec repli
-    automatique sur une boucle Python si la compilation échoue ;
-  - la progression (`pos`/`total`) est un compteur partagé, relu par polling ;
-  - rien n'est simulé : la durée affichée est la vraie durée écoulée ;
-  - « Interrompre » appelle stop(id), qui coupe VRAIMENT la boucle (C ou
-    Python, le thread s'arrête au prochain contrôle, il ne continue pas en
-    arrière-plan) ;
-  - pour l'espace « complexe » réaliste (3×10^15), rien ne borne la boucle :
-    elle peut tourner des jours, des mois, des siècles — c'est voulu, c'est à
-    l'utilisateur de l'arrêter.
+machine : la boucle tourne en C compilé (native_attacks.py) quand gcc est
+disponible, avec repli automatique sur une boucle Python ; la progression est un
+compteur partagé relu par polling ; « Interrompre » coupe vraiment la boucle.
 
 passwords.py garde tout le calcul « pur » (espace, rang, dictionnaire,
 estimations théoriques) ; ce module ne fait que le faire tourner pour de vrai.
@@ -42,10 +31,11 @@ _MAX_AGE = 600           # une attaque terminée est oubliée 10 min après sa f
 _CHECK_EVERY = 4000       # fréquence de mise à jour du compteur / contrôle d'arrêt (repli Python)
 
 
+# Une attaque en cours (ou terminée) : son état partagé entre le thread qui
+# calcule et les requêtes de progression.
 class Run:
-    """Une attaque en cours (ou terminée) : son état partagé entre le thread
-    qui calcule et les requêtes de progression."""
 
+    # Initialise un identifiant unique et l'état de départ de l'attaque.
     def __init__(self):
         self.id = uuid.uuid4().hex
         self.pos = 0
@@ -57,6 +47,7 @@ class Run:
         self.stop_event = threading.Event()
         self.native_stop = None     # ctypes.c_int() si la boucle C est en cours (voir stop())
 
+    # Photographie de l'état courant pour la réponse HTTP (position, vitesse, résultat).
     def snapshot(self) -> Dict[str, Any]:
         elapsed = (self.finished_at or time.time()) - self.started
         rate = self.pos / elapsed if elapsed > 0 else 0.0
@@ -66,6 +57,7 @@ class Run:
         }
 
 
+# Oublie les attaques terminées depuis plus de _MAX_AGE (à appeler sous _lock).
 def _prune_locked():
     now = time.time()
     dead = [rid for rid, r in _runs.items() if r.done and r.finished_at and now - r.finished_at > _MAX_AGE]
@@ -73,12 +65,14 @@ def _prune_locked():
         _runs.pop(rid, None)
 
 
+# Enregistre une attaque dans le registre global après un nettoyage des anciennes.
 def _register(run: Run) -> None:
     with _lock:
         _prune_locked()
         _runs[run.id] = run
 
 
+# Retrouve une attaque par son identifiant (None si inconnue ou oubliée).
 def get(run_id: str) -> Optional[Run]:
     return _runs.get(run_id)
 
@@ -86,11 +80,10 @@ def get(run_id: str) -> Optional[Run]:
 _POLL_NATIVE = 0.05   # fréquence à laquelle on recopie le compteur C -> run.pos
 
 
+# Lance `fn` (un appel C bloquant) en recopiant pos_cell.value -> run.pos
+# pendant ce temps. L'appel C relâche le GIL, donc ce thread tourne vraiment en
+# même temps que la boucle C et la progression reste visible par polling HTTP.
 def _run_native(run: Run, pos_cell, fn):
-    """Lance `fn` (un appel C bloquant) en recopiant pos_cell.value -> run.pos
-    pendant ce temps : l'appel C relâche le GIL, donc ce thread tourne
-    vraiment EN MÊME TEMPS que la boucle C, et la progression reste visible
-    par polling HTTP même quand `fn` met plusieurs secondes (ou plus) à revenir."""
     stop_poll = threading.Event()
 
     def poller():
@@ -107,9 +100,9 @@ def _run_native(run: Run, pos_cell, fn):
         run.pos = pos_cell.value
 
 
+# Coupe vraiment le thread de calcul (pas seulement l'affichage), que la boucle
+# tourne en C ou, en repli, en pur Python.
 def stop(run_id: str) -> bool:
-    """Coupe vraiment le thread de calcul (pas seulement l'affichage) — que la
-    boucle tourne en C ou, en repli, en pur Python."""
     run = _runs.get(run_id)
     if run is None:
         return False
@@ -119,7 +112,8 @@ def stop(run_id: str) -> bool:
     return True
 
 
-# -------------------------------------------------------------- force brute ----
+# Remplit run.result à la fin d'une force brute : construit le verdict (trouvé /
+# cassé), la durée RÉELLE écoulée et les estimations théoriques de passwords.py.
 def _finish_brute(run: Run, rank, limit, charset, length, label, space, check, really_looped):
     run.finished_at = time.time()
     cracked = check["valid"] and rank is not None and (limit is None or rank <= int(limit))
@@ -127,7 +121,7 @@ def _finish_brute(run: Run, rank, limit, charset, length, label, space, check, r
     est = pw.estimate_for(len(charset), length, rate_ref)
     elapsed = run.finished_at - run.started
     if rank is not None:
-        find_human, find_strength = pw.human_time(elapsed)   # durée RÉELLE, pas la vitesse fictive
+        find_human, find_strength = pw.human_time(elapsed)
     else:
         find_human, find_strength = None, None
     run.result = {
@@ -144,13 +138,14 @@ def _finish_brute(run: Run, rank, limit, charset, length, label, space, check, r
     run.done = True
 
 
+# Démarre une attaque par force brute dans un thread de fond et renvoie son Run.
+# Si l'attaquant connaît la composition du mot de passe (cas complexe), il
+# restreint son jeu de caractères au jeu détecté ; sinon il garde le jeu complet.
 def start_bruteforce(target, case, length=None, limit=None, rules=None, know_composition=True) -> Run:
     run = Run()
     charset, length_r, label = pw._resolve_case(case, length)
     check = pw.validate(target, case, length_r, rules)
 
-    # cas complexe : l'attaquant qui CONNAÎT la composition restreint son jeu de
-    # caractères (minuscules seules -> 26, pas 86). Sinon il garde le jeu complet.
     if case == "complexe" and know_composition:
         detected = pw.detected_charset(target)
         if detected:
@@ -164,6 +159,9 @@ def start_bruteforce(target, case, length=None, limit=None, rules=None, know_com
         _finish_brute(run, None, limit, charset, length_r, label, space, check, really_looped=False)
         return run
 
+    # Corps du thread : boucle C quand elle est dispo (et longueur gérable),
+    # sinon repli sur itertools.product en pur Python ; les deux remontent le
+    # rang du mot de passe trouvé (ou None).
     def work():
         rank = None
         if native.available() and 0 < length_r <= 64:
@@ -175,7 +173,6 @@ def start_bruteforce(target, case, length=None, limit=None, rules=None, know_com
             )
             rank = rank_val if found else None
         else:
-            # repli : boucle pure Python (si gcc est indisponible)
             attempts = 0
             for combo in itertools.product(charset, repeat=length_r):
                 attempts += 1
@@ -196,12 +193,14 @@ def start_bruteforce(target, case, length=None, limit=None, rules=None, know_com
     return run
 
 
-# -------------------------------------------------------------- dictionnaire ----
+# Démarre une attaque par dictionnaire dans un thread de fond et renvoie son Run.
 def start_dictionary(target, limit=None, lang="fr") -> Run:
     run = Run()
     run.total = pw.dictionary_size()
     _register(run)
 
+    # Corps du thread : trois chemins possibles — scan en C fichier par fichier,
+    # repli sur la petite liste codée en dur, ou boucle Python mot à mot.
     def work():
         pos = 0
         found = False
@@ -209,9 +208,9 @@ def start_dictionary(target, limit=None, lang="fr") -> Run:
         paths = pw._dict_paths(lang)
 
         if native.available() and paths:
-            # chaque fichier est décompressé en mémoire (un seul à la fois, jamais
-            # tout le dictionnaire d'un coup), puis scanné en C — bien plus rapide
-            # que la comparaison mot à mot en pur Python.
+            # Chaque fichier est décompressé en mémoire (un seul à la fois) puis
+            # scanné en C. Le buffer est normalisé en UTF-8 car le C compare des
+            # octets et `target` est en UTF-8.
             stop_cell = ctypes.c_int(0)
             run.native_stop = stop_cell
             pos_cell = ctypes.c_longlong(0)
@@ -219,8 +218,6 @@ def start_dictionary(target, limit=None, lang="fr") -> Run:
                 opener = pw.gzip.open if path.endswith(".gz") else open
                 with opener(path, "rb") as f:
                     raw = f.read()
-                # normalise en UTF-8 (même logique que _iter_words : le C compare des
-                # octets, donc le buffer doit être dans le même encodage que `target`)
                 if enc != "utf-8":
                     raw = raw.decode(enc, errors="replace").encode("utf-8")
                 found_here, interrupted, rank_here, scanned_here = _run_native(
@@ -236,11 +233,9 @@ def start_dictionary(target, limit=None, lang="fr") -> Run:
                     stopped = True
                     break
             else:
-                # for..else : tous les fichiers parcourus sans "break" (pas trouvé, pas
-                # interrompu, pas stoppé par la limite) -> on scanne le complément ajouté
-                # à la main (dictionnaire_extra.txt), TOUJOURS en dernier -- même ordre
-                # que pw._iter_words() et pw.dictionary_size(), pour que la boucle C et
-                # le repli Python donnent exactement le même résultat.
+                # for..else : tous les fichiers parcourus sans "break" -> on scanne
+                # le complément ajouté à la main (dictionnaire_extra.txt), TOUJOURS
+                # en dernier, même ordre que pw._iter_words() / pw.dictionary_size().
                 extra_words = list(pw._extra_words())
                 if extra_words:
                     raw = ("\n".join(extra_words) + "\n").encode("utf-8")

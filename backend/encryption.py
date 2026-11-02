@@ -1,17 +1,17 @@
-# -*- coding: utf-8 -*-
 """
-Part 2 — Ciphers: Caesar, Playfair, Hill.
+Partie 2 — Chiffrements : César, Playfair, Hill.
 
-Pure cipher logic (no interface, no web). This is the original Python code from
-the Tkinter version, kept as-is so the team reads the algorithms in one place.
-The web backend imports these functions; the animations are built on top in
-traces.py.
+Logique pure des chiffrements (aucune interface, aucun web). C'est le code
+Python d'origine de la version Tkinter, gardé tel quel pour que l'équipe lise les
+algorithmes à un seul endroit. Le backend web importe ces fonctions ; les
+animations sont construites par-dessus dans traces.py.
 """
 
-#  Caesar
 CAESAR_ALPHABET = 26
 
 
+# Décale une lettre de `shift` positions dans l'alphabet (en respectant la
+# casse) ; renvoie les non-lettres inchangées.
 def _shift_char(ch, shift):
     if ch.isupper():
         base = ord("A")
@@ -22,16 +22,20 @@ def _shift_char(ch, shift):
     return chr((ord(ch) - base + shift) % CAESAR_ALPHABET + base)
 
 
+# Chiffre un texte par César ; `direction="left"` inverse le sens du décalage.
 def caesar_encrypt(text, shift, direction="right"):
     if direction == "left":
         shift = -shift
     return "".join(_shift_char(c, shift) for c in text)
 
 
+# Déchiffre un César : chiffre dans la direction opposée.
 def caesar_decrypt(text, shift, direction="right"):
     return caesar_encrypt(text, shift, "left" if direction == "right" else "right")
 
 
+# Message d'avertissement si la clé de César est faible (décalage nul ou ROT13),
+# None sinon.
 def caesar_weak_key(shift):
     if shift % CAESAR_ALPHABET == 0:
         return ("Décalage nul (clé = 0 ou un multiple de 26) : le message "
@@ -42,12 +46,12 @@ def caesar_weak_key(shift):
     return None
 
 
-#  Playfair
-PLAYFAIR_ALPHABET = "ABCDEFGHIKLMNOPQRSTUVWXYZ"  # alphabet without J
+PLAYFAIR_ALPHABET = "ABCDEFGHIKLMNOPQRSTUVWXYZ"  # alphabet sans J
 
 
+# Construit la grille 5x5 de Playfair à partir de la clé (I et J partagent une case).
 def _playfair_matrix(key):
-    key = key.upper().replace("J", "I")  # I and J share the same cell
+    key = key.upper().replace("J", "I")
     seen = []
     for ch in key + PLAYFAIR_ALPHABET:
         if ch.isalpha() and ch not in seen:
@@ -55,9 +59,9 @@ def _playfair_matrix(key):
     return [seen[i * 5:(i + 1) * 5] for i in range(5)]
 
 
+# Avertit si la clé laisse la grille de l'alphabet (clé vide ou début d'alphabet,
+# J comptant pour I), None sinon.
 def playfair_weak_key(key):
-    """Avertissement si la clé laisse la grille de l'alphabet (A B C D E / F G H I K / …) :
-    c'est la clé vide, ou un début d'alphabet (A, AB, ABC, ABCDE…), le J comptant pour I."""
     grid = "".join("".join(row) for row in _playfair_matrix(key))
     if grid == PLAYFAIR_ALPHABET:
         return ("Cette clé laisse la grille de l'alphabet (A B C D E / F G H I K…) : "
@@ -66,6 +70,7 @@ def playfair_weak_key(key):
     return None
 
 
+# Position (ligne, colonne) d'une lettre dans la grille ; lève ValueError si absente.
 def _playfair_pos(matrix, ch):
     for r in range(5):
         for c in range(5):
@@ -74,10 +79,13 @@ def _playfair_pos(matrix, ch):
     raise ValueError(f"La lettre « {ch} » n'existe pas dans la grille.")
 
 
+# Ne garde que les lettres (en majuscules) et fusionne J en I.
 def _playfair_clean(text):
     return "".join(c for c in text.upper() if c.isalpha()).replace("J", "I")
 
 
+# Découpe le texte en digrammes, en insérant un bourrage (X, ou Q après un X)
+# entre deux lettres identiques ou pour compléter un digramme final.
 def _playfair_digrams(text):
     pairs = []
     i = 0
@@ -96,6 +104,8 @@ def _playfair_digrams(text):
     return pairs
 
 
+# Chiffre un texte par Playfair (même ligne -> +1 colonne, même colonne -> +1
+# ligne, sinon échange des colonnes du rectangle).
 def playfair_encrypt(text, key):
     m = _playfair_matrix(key)
     out = []
@@ -111,6 +121,7 @@ def playfair_encrypt(text, key):
     return "".join(out)
 
 
+# Déchiffre un Playfair (règles inverses du chiffrement : -1 colonne / -1 ligne).
 def playfair_decrypt(text, key):
     m = _playfair_matrix(key)
     text = _playfair_clean(text)
@@ -128,10 +139,10 @@ def playfair_decrypt(text, key):
     return "".join(out)
 
 
-#  Hill
 MOD = 26
 
 
+# Algorithme d'Euclide étendu : renvoie (pgcd, x, y) tel que a*x + b*y = pgcd.
 def _egcd(a, b):
     if a == 0:
         return b, 0, 1
@@ -139,15 +150,18 @@ def _egcd(a, b):
     return g, y - (b // a) * x, x
 
 
+# Inverse modulaire de a modulo m (None s'il n'existe pas).
 def _mod_inverse(a, m=MOD):
     g, x, _ = _egcd(a % m, m)
     return None if g != 1 else x % m
 
 
+# Mineur de la matrice : la supprime de sa ligne i et de sa colonne j.
 def _minor(mat, i, j):
     return [row[:j] + row[j + 1:] for k, row in enumerate(mat) if k != i]
 
 
+# Déterminant d'une matrice carrée, par développement récursif de Laplace.
 def _determinant(mat):
     n = len(mat)
     if n == 1:
@@ -158,6 +172,8 @@ def _determinant(mat):
                for j in range(n))
 
 
+# Inverse d'une matrice modulo m (via comatrice et inverse du déterminant). Lève
+# ValueError si le déterminant n'est pas inversible modulo m (clé indéchiffrable).
 def matrix_mod_inverse(mat, m=MOD):
     n = len(mat)
     det = _determinant(mat) % m
@@ -172,10 +188,12 @@ def matrix_mod_inverse(mat, m=MOD):
     return [[(det_inv * adj[i][j]) % m for j in range(n)] for i in range(n)]
 
 
+# Ne garde que les lettres (en majuscules).
 def _hill_clean(text):
     return "".join(c for c in text.upper() if c.isalpha())
 
 
+# Applique la matrice de Hill au texte, bloc par bloc (produit matrice-vecteur mod 26).
 def _hill_apply(mat, text):
     n = len(mat)
     nums = [ord(c) - ord("A") for c in text]
@@ -187,6 +205,7 @@ def _hill_apply(mat, text):
     return "".join(chr(v + ord("A")) for v in out)
 
 
+# Chiffre un texte par Hill (complète le dernier bloc avec des X si besoin).
 def hill_encrypt(text, key_matrix):
     text = _hill_clean(text)
     n = len(key_matrix)
@@ -195,13 +214,14 @@ def hill_encrypt(text, key_matrix):
     return _hill_apply(key_matrix, text)
 
 
+# Déchiffre un Hill en appliquant l'inverse modulaire de la matrice clé.
 def hill_decrypt(text, key_matrix):
     inverse = matrix_mod_inverse(key_matrix, MOD)
     return _hill_apply(inverse, _hill_clean(text))
 
 
+# Transforme une saisie '3 3 2 5' (ou '3,3;2,5') en matrice carrée [[3,3],[2,5]].
 def parse_matrix(s):
-    # Transform '3 3 2 5' (or '3,3;2,5') into a square matrix [[3,3],[2,5]].
     nums = [int(x) for x in s.replace(",", " ").replace(";", " ").split()]
     if not nums:
         raise ValueError("Saisis les nombres de la matrice, ex. 3 3 2 5")
@@ -212,8 +232,8 @@ def parse_matrix(s):
     return [nums[i * n:(i + 1) * n] for i in range(n)]
 
 
+# Vérifie une matrice venue de la grille de l'UI : carrée et faite d'entiers.
 def validate_matrix(matrix):
-    """Check a matrix coming from the UI grid: square and made of integers."""
     if not matrix or not all(isinstance(row, list) for row in matrix):
         raise ValueError("La matrice est vide.")
     n = len(matrix)
@@ -226,6 +246,8 @@ def validate_matrix(matrix):
     return matrix
 
 
+# Message d'avertissement si la clé de Hill est faible (non inversible, identité,
+# diagonale ou permutation), None sinon.
 def hill_weak_key(matrix):
     try:
         matrix_mod_inverse(matrix)
@@ -248,8 +270,9 @@ def hill_weak_key(matrix):
     return None
 
 
+# Vrai si la matrice est une permutation : un seul 1 par ligne et par colonne,
+# des 0 partout ailleurs (modulo 26).
 def _is_permutation_matrix(matrix):
-    """Un seul 1 par ligne et par colonne, des 0 partout ailleurs (modulo 26)."""
     m = [[v % 26 for v in row] for row in matrix]
     n = len(m)
     for rows in (m, [list(col) for col in zip(*m)]):
@@ -262,18 +285,17 @@ def _is_permutation_matrix(matrix):
 # -------------------------------- mise en forme : espaces & bourrage (X) ------
 # Les trois algorithmes ne travaillent que sur des lettres. Pour que le message
 # chiffré sorte « en un seul morceau » (sans espaces) ET que le déchiffrement
-# retrouve les espaces, on range à côté du bloc chiffré deux métadonnées :
+# retrouve les espaces, on range à côté du bloc chiffré trois métadonnées :
 #   - layout  : les non-lettres (espaces, ponctuation...) et leur position ;
 #   - fillers : les positions des lettres AJOUTÉES par l'algo (les X de Playfair
 #               et de Hill), pour pouvoir les retirer au déchiffrement ;
-#   - cases   : les positions des lettres écrites en MINUSCULES. On chiffre en
-#               majuscules (les algos ne changent pas) et on remet les minuscules
-#               aux mêmes positions au déchiffrement.
+#   - cases   : les positions des lettres écrites en MINUSCULES.
 # César n'ajoute rien : fillers y est toujours vide.
 
+
+# Sépare le message en (lettres, layout) : lettres = caractères alphabétiques
+# seuls ; layout = [[index_dans_l_original, caractère], ...] pour chaque non-lettre.
 def split_layout(message):
-    """(lettres, layout). lettres = uniquement les caractères alphabétiques ;
-    layout = [[index_dans_l_original, caractère], ...] pour chaque non-lettre."""
     letters, layout = [], []
     for i, ch in enumerate(message):
         if ch.isalpha():
@@ -283,8 +305,8 @@ def split_layout(message):
     return "".join(letters), layout
 
 
+# Réinsère les non-lettres à leurs positions d'origine (layout dans l'ordre).
 def merge_layout(letters, layout):
-    """Réinsère les non-lettres à leurs positions d'origine (layout dans l'ordre)."""
     chars = list(letters)
     for item in layout:
         i, ch = item[0], item[1]
@@ -292,25 +314,24 @@ def merge_layout(letters, layout):
     return "".join(chars)
 
 
+# Retire les lettres ajoutées par l'algo (X de Playfair/Hill), repérées par leur
+# position dans le flux de lettres.
 def strip_fillers(letters, fillers):
-    """Retire les lettres ajoutées par l'algo (X de Playfair/Hill), repérées par
-    leur position dans le flux de lettres."""
     drop = set(fillers or [])
     return "".join(c for i, c in enumerate(letters) if i not in drop)
 
 
+# Positions des X de bourrage ajoutés par Hill (fin du dernier bloc).
 def hill_fillers(letter_count, n):
-    """Positions des X de bourrage ajoutés par Hill (fin du dernier bloc)."""
     padded = letter_count
     while padded % n != 0:
         padded += 1
     return list(range(letter_count, padded))
 
 
+# Positions, dans le flux de lettres, des X insérés par Playfair. Reproduit
+# exactement la logique de _playfair_digrams, mais ne note que les positions.
 def playfair_fillers(clean):
-    """Positions, dans le flux de lettres, des X insérés par Playfair (entre deux
-    lettres identiques ou pour compléter un digramme final). Reproduit exactement
-    la logique de _playfair_digrams, mais ne note que les positions."""
     fillers = []
     i = 0
     pair = 0
@@ -325,27 +346,26 @@ def playfair_fillers(clean):
     return fillers
 
 
+# Positions des lettres J d'origine dans le flux de lettres : Playfair fusionne J
+# avec I, on mémorise où étaient les J pour les restituer au déchiffrement.
 def playfair_jmap(letters):
-    """Positions des lettres J d'origine dans le flux de lettres. Playfair fusionne
-    J avec I (ils partagent une case) ; on mémorise où étaient les J pour pouvoir
-    les restituer au déchiffrement — exactement comme le layout pour les espaces."""
     return [i for i, ch in enumerate(letters) if ch.upper() == "J"]
 
 
+# Positions (dans le flux de lettres) des minuscules a-z : la « casse » à mémoriser.
 def lower_positions(letters):
-    """Positions (dans le flux de lettres) des minuscules a-z : la « casse » à mémoriser."""
     return [i for i, ch in enumerate(letters) if "a" <= ch <= "z"]
 
 
+# Passe les lettres a-z en majuscules une pour une (la longueur ne change jamais,
+# donc les positions mémorisées restent valables).
 def to_upper(letters):
-    """Passe les lettres a-z en majuscules, une pour une (la longueur ne change jamais,
-    donc les positions mémorisées restent valables)."""
     return "".join(ch.upper() if "a" <= ch <= "z" else ch for ch in letters)
 
 
+# Inverse de to_upper : remet en minuscules les lettres aux positions mémorisées
+# (cases). À appliquer après strip_fillers et restore_j, avant merge_layout.
 def restore_case(letters, cases):
-    """Inverse de to_upper : remet en minuscules les lettres aux positions mémorisées
-    (cases). À appliquer après strip_fillers et restore_j, avant merge_layout."""
     if not cases:
         return letters
     chars = list(letters)
@@ -355,10 +375,10 @@ def restore_case(letters, cases):
     return "".join(chars)
 
 
+# Inverse de la fusion J->I : reconvertit en J les I situés aux positions
+# mémorisées (jmap, dans le flux de lettres sans les X). À appliquer après
+# strip_fillers et avant merge_layout.
 def restore_j(letters, jmap):
-    """Inverse de la fusion J→I : reconvertit en J les I situés aux positions
-    mémorisées (jmap). Les positions sont celles du flux de lettres SANS les X
-    ajoutés, donc à appliquer après strip_fillers et avant merge_layout."""
     if not jmap:
         return letters
     chars = list(letters)

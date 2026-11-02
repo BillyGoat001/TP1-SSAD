@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Captchas fabriqués et vérifiés par le serveur, pensés contre les agents IA qui lisent
 des captures d'écran (les modèles de vision actuels lisent sans effort un texte déformé,
@@ -60,13 +59,15 @@ _rng = random.SystemRandom()
 _ALPHABET = "ACDEFGHJKMNPRTUVWXY34679"
 
 
-# --------------------------------------------------------------- utilitaires ----
+# Encode une image PIL en data URL PNG (base64), prête à être mise dans du HTML.
 def _data_url(im: Image.Image) -> str:
     buf = io.BytesIO()
     im.save(buf, "PNG")
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
+# Charge une police grasse à la taille voulue, en essayant plusieurs chemins
+# connus (Linux, macOS, Windows) avant de retomber sur la police par défaut.
 def _font(size: int) -> ImageFont.FreeTypeFont:
     for path in (
         "DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -80,8 +81,9 @@ def _font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default(size=size)
 
 
+# Dessine les caractères en blanc sur fond noir, chacun un peu penché et décalé
+# (le masque qui sert de forme aux trois captchas).
 def _glyph_mask(text: str, w: int, h: int, size: int, tilt: float = 9, jitter: int = 4) -> Image.Image:
-    """Les caractères en blanc sur noir, chacun un peu penché et décalé."""
     mask = Image.new("L", (w, h), 0)
     n = len(text)
     cell = w / n
@@ -97,10 +99,11 @@ def _glyph_mask(text: str, w: int, h: int, size: int, tilt: float = 9, jitter: i
     return mask
 
 
-# ------------------------------------------------------------------ mouvement ----
 MW, MH = 160, 56            # le masque (le canvas du navigateur l'agrandit ×2)
 
 
+# Fabrique un captcha « mouvement » : encode le masque des 4 caractères en bits
+# et renvoie (données publiques, secret, durée minimale avant réponse).
 def _make_motion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     text = "".join(_rng.choice(_ALPHABET) for _ in range(4))
     mask = _glyph_mask(text, MW, MH, 52)
@@ -124,16 +127,16 @@ def _make_motion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     return public, {"text": text}, 2.0
 
 
-# ------------------------------------------------------------ illusion de contour ----
 IW, IH = 330, 112
 ILLUSION_ANGLE = 26        # écart d'inclinaison des rayures dans les caractères (degrés) : 0 = phase seule (très dur à lire,
                            # même pour un humain) ; 34 = plus facile pour tout le monde, y compris pour un modèle de vision
 
 
+# Renvoie une couleur de teinte `hue` dont la luminance perçue vaut `luma` (0..1),
+# trouvée par dichotomie sur la clarté HLS. Nécessaire car deux teintes à clarté
+# HLS égale n'ont pas la même luminance perçue (le bleu paraît plus sombre que le
+# jaune), ce qui gâcherait le contraste contrôlé entre les bandes.
 def _tone(hue: float, luma: float, sat: float = 0.55) -> Tuple[int, int, int]:
-    """Une couleur de teinte `hue` dont la luminance perçue vaut `luma` (0..1) : on cherche
-    la clarté HLS qui donne cette luminance (le bleu est perçu bien plus sombre que le jaune
-    à clarté HLS égale, donc la clarté seule ne garantit pas le contraste entre les bandes)."""
     lo, hi = 0.02, 0.98
     rgb = (0, 0, 0)
     for _ in range(18):
@@ -148,6 +151,9 @@ def _tone(hue: float, luma: float, sat: float = 0.55) -> Tuple[int, int, int]:
     return rgb
 
 
+# Fabrique un captcha « illusion de contour » : rayures dont la phase est décalée
+# à l'intérieur des caractères, plus quelques taches leurres. Renvoie (public,
+# secret, durée minimale).
 def _make_illusion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     text = "".join(_rng.choice(_ALPHABET) for _ in range(4))
     mask = _glyph_mask(text, IW, IH, 98, tilt=7, jitter=3)
@@ -182,7 +188,9 @@ def _make_illusion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     return public, {"text": text}, 2.0
 
 
-# ----------------------------------------------------------- la clé et les cadenas ----
+# Fabrique un captcha « clé et cadenas » : enregistre une suite d'échanges de
+# position et retient l'emplacement final du cadenas qui cache la clé. Renvoie
+# (public, secret, durée totale de l'animation).
 def _make_shuffle() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     n = 5
     pos = list(range(n))                      # pos[emplacement] = numéro du cadenas qui s'y trouve
@@ -209,9 +217,8 @@ def _make_shuffle() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
 _MAKERS = {"motion": _make_motion, "illusion": _make_illusion, "shuffle": _make_shuffle}
 
 
-# ------------------------------------------------------------ preuve de travail ----
+# Vrai si sha256(challenge:nonce) commence par `bits` zéros (vérifie la preuve de travail).
 def pow_ok(challenge: str, nonce: Any, bits: int) -> bool:
-    """sha256(challenge:nonce) commence-t-il par `bits` zéros ?"""
     try:
         digest = hashlib.sha256(f"{challenge}:{int(nonce)}".encode()).digest()
     except (TypeError, ValueError):
@@ -220,10 +227,10 @@ def pow_ok(challenge: str, nonce: Any, bits: int) -> bool:
     return val >> (256 - bits) == 0
 
 
-# ---------------------------------------------------------- cycle de vie ----
+# Crée un nouveau captcha, d'une sorte différente de `exclude` (le précédent) si
+# possible, et le range en mémoire. `extra_bits` renforce la preuve de travail
+# après des échecs. Purge au passage les captchas expirés et les plus vieux.
 def new_challenge(exclude: Optional[str] = None, extra_bits: int = 0, now: Optional[float] = None) -> Dict[str, Any]:
-    """Un nouveau captcha, d'une sorte différente de `exclude` (le précédent) si possible.
-    `extra_bits` : difficulté ajoutée à la preuve de travail (échecs récents)."""
     now = now if now is not None else time.time()
     kinds = [k for k in KINDS if k != exclude] or list(KINDS)
     kind = _rng.choice(kinds)
@@ -242,9 +249,9 @@ def new_challenge(exclude: Optional[str] = None, extra_bits: int = 0, now: Optio
     return {"id": cid, "kind": kind, "ttl": TTL, "pow": {"challenge": pow_challenge, "bits": bits}, **public}
 
 
+# Vérifie une réponse et renvoie 'ok' ou la raison du refus (unknown · expired ·
+# pow · fast · wrong). Le captcha est détruit quoi qu'il arrive (usage unique).
 def verify(cid: str, answer: Any, nonce: Any = None, now: Optional[float] = None) -> str:
-    """'ok', ou la raison du refus : unknown · expired · pow · fast · wrong.
-    Le captcha est détruit quoi qu'il arrive (usage unique)."""
     now = now if now is not None else time.time()
     with _lock:
         ch = _store.pop(str(cid), None)
@@ -265,27 +272,28 @@ def verify(cid: str, answer: Any, nonce: Any = None, now: Optional[float] = None
         return "wrong"
 
 
+# Abandonne un défi (fenêtre fermée, défi remplacé) : il ne pourra plus servir.
 def discard(cid: str) -> bool:
-    """Abandonne un défi (fenêtre fermée, défi remplacé) : il ne pourra plus servir."""
     with _lock:
         return _store.pop(str(cid), None) is not None
 
 
+# Nombre de captchas actuellement en attente.
 def pending() -> int:
     with _lock:
         return len(_store)
 
 
+# Résout la preuve de travail (le calcul que fait le navigateur ; ici en Python pour les tests).
 def solve_pow(challenge: str, bits: int) -> int:
-    """Le travail que le navigateur fait (ici en Python, pour les tests)."""
     n = 0
     while not pow_ok(challenge, n, bits):
         n += 1
     return n
 
 
+# RÉSERVÉ AUX TESTS : la réponse d'un captcha en attente (jamais exposée par l'API).
 def _answer_for_tests(cid: str) -> Optional[Dict[str, Any]]:
-    """RÉSERVÉ AUX TESTS : la réponse d'un captcha en attente (jamais exposée par l'API)."""
     with _lock:
         ch = _store.get(cid)
         if not ch:

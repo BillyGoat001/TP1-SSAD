@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Base de données des comptes et des tentatives de connexion.
 
@@ -117,9 +116,9 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 _JSON_FIELDS = ("key", "layout", "fillers", "jmap", "cases")
 
 
+# Chemin du fichier SQLite (créé au besoin). Relu à chaque appel : les tests
+# peuvent rediriger la base avec la variable d'environnement USERS_DB.
 def db_path() -> str:
-    """SQLite uniquement. Relu à chaque appel : les tests peuvent rediriger la base
-    avec USERS_DB."""
     p = os.environ.get("USERS_DB")
     if p:
         os.makedirs(os.path.dirname(os.path.abspath(p)), exist_ok=True)
@@ -127,12 +126,13 @@ def db_path() -> str:
     return os.path.join(storage.data_dir(), "users.db")
 
 
+# Adapte une requête au moteur : les `?` (style SQLite) deviennent `%s` pour
+# PostgreSQL. Aucun `?` n'apparaît ailleurs que comme paramètre dans ce fichier.
 def _q(sql: str) -> str:
-    """Les requêtes sont écrites avec `?` (style SQLite) ; converties en `%s` pour
-    PostgreSQL. Aucun `?` n'apparaît ailleurs que comme paramètre dans ce fichier."""
     return sql.replace("?", "%s") if PG else sql
 
 
+# Ouvre une connexion au moteur actif et garantit l'existence des deux tables.
 def _connect():
     if PG:
         con = psycopg.connect(DATABASE_URL, row_factory=dict_row)
@@ -147,10 +147,12 @@ def _connect():
     return con
 
 
+# Horodatage UTC ISO 8601 à la seconde.
 def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
+# Convertit une ligne SQL en dict en décodant les champs JSON (None si pas de ligne).
 def _row(r) -> Optional[Dict[str, Any]]:
     if r is None:
         return None
@@ -160,22 +162,22 @@ def _row(r) -> Optional[Dict[str, Any]]:
     return d
 
 
+# Sérialise les champs d'un enregistrement de chiffrement dans l'ordre des colonnes SQL.
 def _values(record: Dict[str, Any]) -> tuple:
     return (record["method"], json.dumps(record["key"]), record["secret"],
             json.dumps(record["layout"]), json.dumps(record["fillers"]),
             json.dumps(record["jmap"]), json.dumps(record["cases"]))
 
 
-# --------------------------------------------------------------------- comptes ----
+# Renvoie le compte (champs JSON déjà décodés) ou None. Insensible à la casse.
 def get_user(username: str) -> Optional[Dict[str, Any]]:
-    """Le compte (champs JSON déjà décodés) ou None. Insensible à la casse."""
     with _lock, closing(_connect()) as con:
         return _row(con.execute(_q("SELECT * FROM users WHERE username_lc = ?"),
                                 ((username or "").strip().lower(),)).fetchone())
 
 
+# Ajoute un compte. False si le nom est déjà pris.
 def create_user(username: str, record: Dict[str, Any]) -> bool:
-    """Ajoute un compte. False si le nom est déjà pris."""
     with _lock, closing(_connect()) as con:
         try:
             con.execute(_q(
@@ -189,9 +191,9 @@ def create_user(username: str, record: Dict[str, Any]) -> bool:
             return False
 
 
+# Change le mot de passe d'un compte existant (et le débloque, toutes IP
+# comprises). False s'il n'existe pas.
 def replace_user(username: str, record: Dict[str, Any]) -> bool:
-    """Change le mot de passe d'un compte existant (et le débloque, toutes IP
-    comprises). False s'il n'existe pas."""
     with _lock, closing(_connect()) as con:
         cur = con.execute(_q(
             "UPDATE users SET method=?, key=?, secret=?, layout=?, fillers=?, jmap=?, cases=?, failed=0, blocked=0 "
@@ -201,18 +203,19 @@ def replace_user(username: str, record: Dict[str, Any]) -> bool:
         return cur.rowcount > 0
 
 
+# Supprime un compte et toutes ses tentatives de connexion. False s'il n'existe pas.
 def delete_user(username: str) -> bool:
     with _lock, closing(_connect()) as con:
         cur = con.execute(_q("DELETE FROM users WHERE username_lc = ?"), (username.lower(),))
-        con.execute(_q("DELETE FROM login_attempts WHERE username_lc = ?"), (username.lower(),))  # ménage
+        con.execute(_q("DELETE FROM login_attempts WHERE username_lc = ?"), (username.lower(),))
         con.commit()
         return cur.rowcount > 0
 
 
+# Un compte par ligne, avec l'état de blocage réellement actif : nombre d'IP
+# bloquées et plus grand compteur d'échecs de suite parmi elles (voir
+# login_attempts — remplace l'ancien `blocked`/`failed` globaux, désormais inertes).
 def list_users() -> List[Dict[str, Any]]:
-    """Un compte par ligne, avec l'état de blocage réellement actif : le nombre d'IP
-    bloquées sur ce compte et le plus grand compteur d'échecs de suite parmi elles
-    (voir login_attempts — remplace l'ancien `blocked`/`failed` globaux, inertes)."""
     with _lock, closing(_connect()) as con:
         rows = con.execute(_q(
             "SELECT u.username AS username, u.method AS method, u.created_at AS created_at, "
@@ -224,13 +227,14 @@ def list_users() -> List[Dict[str, Any]]:
         return [dict(r) for r in rows]
 
 
+# Nombre total de comptes.
 def count() -> int:
     with _lock, closing(_connect()) as con:
         return con.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
 
 
+# Débloque le compte sur toutes les IP à la fois (make_user.py nom --unlock).
 def unlock(username: str) -> bool:
-    """Débloque le compte : toutes les IP à la fois (make_user.py nom --unlock)."""
     u = username.lower()
     with _lock, closing(_connect()) as con:
         cur = con.execute(_q("UPDATE users SET failed = 0, blocked = 0 WHERE username_lc = ?"), (u,))
@@ -239,12 +243,10 @@ def unlock(username: str) -> bool:
         return cur.rowcount > 0
 
 
-# --------------------------------------------- tentatives de connexion (par IP) ----
+# Enregistre un échec de connexion de plus DEPUIS CETTE IP sur ce compte. Le
+# couple (compte, IP) est bloqué dès `limit` échecs de suite, sans affecter les
+# autres IP. Renvoie le nombre d'échecs de suite pour ce couple.
 def add_attempt_failure(username: str, ip: str, limit: int) -> int:
-    """Un échec de connexion de plus DEPUIS CETTE IP sur ce compte. Le couple
-    (compte, IP) est bloqué dès `limit` échecs de suite — une autre IP n'est pas
-    affectée (voir is_attempt_blocked). Renvoie le nombre d'échecs de suite pour
-    ce couple."""
     u, now = (username or "").strip().lower(), _now()
     with _lock, closing(_connect()) as con:
         con.execute(_q(
@@ -262,8 +264,8 @@ def add_attempt_failure(username: str, ip: str, limit: int) -> int:
         return r["failed"] if r else 0
 
 
+# Connexion réussie depuis cette IP : son compteur sur ce compte repart de zéro.
 def reset_attempt_failures(username: str, ip: str) -> None:
-    """Connexion réussie depuis cette IP : son compteur sur ce compte repart de zéro."""
     u = (username or "").strip().lower()
     with _lock, closing(_connect()) as con:
         con.execute(_q(
@@ -271,8 +273,8 @@ def reset_attempt_failures(username: str, ip: str) -> None:
         con.commit()
 
 
+# Ce couple (compte, IP) est-il bloqué ?
 def is_attempt_blocked(username: str, ip: str) -> bool:
-    """Ce couple (compte, IP) est-il bloqué ?"""
     u = (username or "").strip().lower()
     with _lock, closing(_connect()) as con:
         r = con.execute(_q(

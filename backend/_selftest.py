@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-"""Backend self-test: logic + all API endpoints. Run: python _selftest.py"""
+# Auto-test du backend : logique + tous les endpoints de l'API. Lancer : python _selftest.py
 import os
 os.environ["TP_POW_BITS"] = "12"        # preuve de travail légère pour les tests
 os.environ["TP_AUTH_OFF"] = "1"        # les tests de l'API ci-dessous tournent sans connexion
@@ -10,6 +9,7 @@ import attacks
 import integrity
 import auth
 
+# Imprime un titre de section dans la sortie des tests.
 def section(t): print("\n=== " + t + " ===")
 
 # ---- ciphers logic + traces ----
@@ -375,6 +375,7 @@ for algo, kw in (("caesar", {"shift": 3}), ("playfair", {"key": "MONARCHY"}), ("
 print("temps de calcul (time_us) renvoyé au chiffrement et au déchiffrement OK")
 
 # espaces : le chiffré sort en un seul bloc, le déchiffrement les retrouve (les 3 algos)
+# Chiffre puis déchiffre `msg` via l'API et renvoie les deux réponses JSON.
 def _roundtrip(algo, msg, **kw):
     e = c.post("/api/cipher", json={"algo":algo,"operation":"encrypt","message":msg,**kw}).json()
     assert e["ok"] and " " not in e["result"], e                 # bloc sans espaces
@@ -398,6 +399,7 @@ d0 = c.post("/api/cipher", json={"algo":"caesar","operation":"decrypt","message"
 assert d0["ok"] and d0["result"] == "BONJOURB", d0
 print("espaces: bloc chiffré sans espaces + déchiffrement qui les retrouve (César/Hill/Playfair) OK")
 # minuscules : on chiffre en majuscules, la casse est mémorisée et remise au déchiffrement
+# Comme _roundtrip mais en transmettant aussi la casse (`cases`) au déchiffrement.
 def _roundtrip_case(algo, msg, **kw):
     e = c.post("/api/cipher", json={"algo":algo,"operation":"encrypt","message":msg,**kw}).json()
     assert e["ok"] and e["result"] == e["result"].upper(), e      # le chiffré reste en majuscules
@@ -520,6 +522,7 @@ os.environ["DATA_DIR"] = _tmp.name          # on n'écrit jamais dans backend/da
 H = os.path.join(_tmp.name, storage.HISTORY_FILE)
 V = os.path.join(_tmp.name, storage.CONVERSATION_FILE)
 
+# Fabrique une entrée d'historique de chiffrement pour les tests.
 def _entry(clear, **kw):
     return {"op": "encrypt", "clear": clear, "cipher": "KHOOR", "algo": "caesar", "algoLabel": "César",
             "key": "3 (droite)", "timeUs": 2.5, **kw}
@@ -581,6 +584,7 @@ print("conversation A<->B : fichier JSON, ordre d'envoi, pas de doublon, validat
 
 # ---- historique des attaques sur mots de passe ----
 P = os.path.join(_tmp.name, storage.PW_HISTORY_FILE)
+# Fabrique une entrée d'historique d'attaque de mot de passe pour les tests.
 def _pw(pwd, **kw):
     return {"attack": "brute", "case": "binaire", "password": pwd, "protection": "Aucune",
             "result": "found", "tries": 5, "timeSec": 5e-10, **kw}
@@ -728,6 +732,8 @@ for _ in range(40):
 assert seen == set(captcha.KINDS), seen
 last = captcha.new_challenge()["kind"]
 assert all(captcha.new_challenge(exclude=last)["kind"] != last for _ in range(30))              # jamais deux fois la même sorte
+# Donne la bonne réponse d'un captcha (via le back-door de test) et, si wait=True,
+# vieillit artificiellement le défi pour passer le contrôle « trop rapide ».
 def solved(ch, answer=None, wait=True):
     a = captcha._answer_for_tests(ch["id"])
     if wait:
@@ -762,6 +768,8 @@ assert anon.get("/api/history").status_code == 401 and anon.post("/api/cipher", 
 assert anon.get("/api/health").status_code == 200
 st = anon.get("/api/auth/status").json()
 assert st["authenticated"] is False and st["auth_required"] is True and st["configured"] is True
+# Effectue une connexion complète via l'API : récupère un captcha, résout sa preuve
+# de travail, puis poste /api/auth/login. Renvoie la réponse HTTP.
 def login(cl, user=PW and "alice", pwd=PW, answer=None, human=None, nonce_ok=True, wait=True):
     chj = cl.get("/api/auth/captcha").json()["challenge"]
     nonce = captcha.solve_pow(chj["pow"]["challenge"], chj["pow"]["bits"]) if nonce_ok else 0
@@ -821,6 +829,7 @@ print("blocage après", auth.MAX_ATTEMPTS, "mots de passe erronés, PAR IP (une 
 # inscription par l'API : défi + règles du mot de passe + doublon, puis connexion
 auth.reset_limits()
 rc = TestClient(app)
+# Même principe que login(), mais poste /api/auth/register (inscription).
 def register(cl, user, pwd, human=None):
     chj = cl.get("/api/auth/captcha").json()["challenge"]
     nonce = captcha.solve_pow(chj["pow"]["challenge"], chj["pow"]["bits"])

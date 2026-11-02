@@ -216,8 +216,9 @@ def set_password(username: str, password: str) -> bool:
 
 # Blocage PAR COUPLE (compte, IP) : 4 échecs de suite depuis une IP bloquent cette IP sur
 # CE compte, pas le compte entier — une autre IP (ex. le vrai propriétaire, chez lui)
-# peut toujours essayer. Limite assumée : un attaquant qui change d'IP repart à zéro ;
-# la protection par IP (locked_for, plus bas) ralentit ce contournement séparément.
+# peut toujours essayer. Nombre fixe, pas d'attente progressive : à 4 échecs, bloqué
+# jusqu'à déblocage admin (make_user.py --unlock). Limite assumée : un attaquant qui
+# change d'IP repart à zéro sur ce compteur.
 #
 # Noms inconnus : on compte aussi leurs échecs (en mémoire, par IP), pour que la réponse
 # soit la même que pour un vrai compte et ne révèle pas si le nom existe.
@@ -318,10 +319,13 @@ def revoke_token(token: Optional[str]) -> None:
 
 
 # ---------------------------------------------- limitation des tentatives ----
-# Trop d'échecs de suite → attente de plus en plus longue (15 s, 30 s, 1 min… 5 min max).
+# Pas d'attente progressive ni de compte à rebours : le seul blocage qui existe
+# est le blocage fixe par couple (compte, IP) ci-dessus (4 échecs -> bloqué
+# jusqu'à déblocage admin, voir is_blocked / attempt_login). Ce compteur-ci ne
+# sert plus qu'à faire monter légèrement la difficulté du CAPTCHA après des
+# échecs récents depuis une IP (voir recent_failures, appelé par /api/auth/captcha).
 _fails: Dict[str, List[float]] = {}
 FAIL_WINDOW = 600
-FREE_FAILS = 5
 
 
 def _recent(key: str, now: float) -> List[float]:
@@ -331,18 +335,6 @@ def _recent(key: str, now: float) -> List[float]:
     else:
         _fails.pop(key, None)
     return lst
-
-
-def locked_for(key: str, now: Optional[float] = None) -> int:
-    """Secondes restant avant de pouvoir réessayer (0 = autorisé)."""
-    now = now if now is not None else time.time()
-    with _lock:
-        lst = _recent(key, now)
-        if len(lst) < FREE_FAILS:
-            return 0
-        wait = min(300, 15 * 2 ** (len(lst) - FREE_FAILS))
-        left = lst[-1] + wait - now
-        return int(left) + 1 if left > 0 else 0
 
 
 def recent_failures(key: str, now: Optional[float] = None) -> List[float]:

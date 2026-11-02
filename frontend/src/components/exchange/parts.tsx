@@ -1,5 +1,5 @@
-// Morceaux d'affichage de l'échange A ↔ B : icônes, champs de clés, et la
-// démonstration du chiffrement / déchiffrement dans les boîtes floutées.
+// Morceaux d'affichage de l'echange A ↔ B : icones, champs de cles, et la
+// demonstration du chiffrement / dechiffrement dans les boites floutees.
 
 import type { CSSProperties } from 'react'
 import type { Algo, ExchangeParams, RsaKey, Trace } from '../../types'
@@ -13,7 +13,7 @@ import { t, _t } from '../../i18n'
 export type U = 'a' | 'b'
 export const OTHER: Record<U, U> = { a: 'b', b: 'a' }
 export const UP = (u: U) => u.toUpperCase()
-// nom de l'algorithme, en français (à passer dans t() pour l'afficher : algoName)
+// nom de l'algorithme, en francais (a passer dans t() pour l'afficher : algoName)
 export const NAME: Record<Algo, string> = { caesar: _t('César'), playfair: 'Playfair', hill: 'Hill' }
 export const algoName = (a: Algo) => t(NAME[a])
 
@@ -22,25 +22,25 @@ export function short(s: string, k = 5): string {
   return s.length <= 2 * k + 3 ? s : s.slice(0, k) + '…' + s.slice(-k)
 }
 
-/** La clé symétrique en clair, telle qu'elle voyage dans le coffre (en français : t() la traduit à l'affichage). */
+/** La cle symetrique en clair, telle qu'elle voyage dans le coffre (en francais : t() la traduit a l'affichage). */
 export function keyText(p: ExchangeParams): string {
   if (p.algo === 'caesar') return `${p.shift} · ${p.direction === 'left' ? 'gauche' : 'droite'}`
   if (p.algo === 'playfair') return p.key ?? ''
   return (p.matrix ?? []).map((r) => r.join(' ')).join(' · ')
 }
 
-/** La même clé, chaque très grand nombre abrégé : pour les titres, les bulles et les pastilles. */
+/** La meme cle, chaque tres grand nombre abrege : pour les titres, les bulles et les pastilles. */
 export function keyShort(p: ExchangeParams): string {
   return keyText(p).replace(/-?\d{14,}/g, (s) => short(s))
 }
 
-/** Texte sur une seule ligne, coupé proprement (pour les animations). */
+/** Texte sur une seule ligne, coupe proprement (pour les animations). */
 export function clip(s: string, max = 90): string {
   const t = s.replace(/\s+/g, ' ').trim()
   return t.length > max ? t.slice(0, max - 1) + '…' : t
 }
 
-/** Chaque lettre s'anime seule, décalée selon son rang (même effet que la partie simple). */
+/** Chaque lettre s'anime seule, decalee selon son rang (meme effet que la partie simple). */
 export function Letters({ text, className, step }: { text: string; className: string; step: number }) {
   return (
     <span className={className}>
@@ -51,7 +51,7 @@ export function Letters({ text, className, step }: { text: string; className: st
   )
 }
 
-// ---------------------------------------------------------------- icônes ----
+// ---------------------------------------------------------------- icones ----
 export const LockIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7.5a4 4 0 0 1 8 0V11" />
@@ -68,7 +68,7 @@ export const UserIcon = () => (
     <path d="M4.5 20.5a7.5 7.5 0 0 1 15 0" />
   </svg>
 )
-/** Petite flèche pleine, tournée vers le destinataire. */
+/** Petite fleche pleine, tournee vers le destinataire. */
 export const Arrow = ({ dir }: { dir: 'left' | 'right' }) => (
   <svg className="ex-arrow" viewBox="0 0 10 10" aria-hidden="true">
     <path d={dir === 'right' ? 'M2.2 1.2 8.6 5l-6.4 3.8z' : 'M7.8 1.2 1.4 5l6.4 3.8z'} fill="currentColor" />
@@ -101,8 +101,8 @@ export const EyeOff = () => (
   </svg>
 )
 
-// ---------------------------------------------------------- champ de clé ----
-// La clé est affichée dans son champ : publique (e, n) ou privée (d, n).
+// ---------------------------------------------------------- champ de cle ----
+// La cle est affichee dans son champ : publique (e, n) ou privee (d, n).
 interface KeyFieldProps {
   kind: 'pub' | 'priv'
   owner: U
@@ -131,9 +131,9 @@ export function KeyField({ kind, owner, k, hidden, iconHidden, fieldRef, iconRef
   )
 }
 
-// ------------------------------------------------- contenu des boîtes ----
-// Chiffrer : la boîte prend la couleur de l'utilisateur. Déchiffrer : celle de
-// l'autre (l'auteur du message). Le résultat, lui, est toujours vert.
+// ------------------------------------------------- contenu des boites ----
+// Chiffrer : la boite prend la couleur de l'utilisateur. Dechiffrer : celle de
+// l'autre (l'auteur du message). Le resultat, lui, est toujours vert.
 export interface BoxView {
   op: 'encrypt' | 'decrypt'
   trace: Trace
@@ -141,7 +141,7 @@ export interface BoxView {
   params: ExchangeParams
 }
 
-/** Démonstration pas à pas (mêmes composants que la partie simple), avec le résultat sous le mot. */
+/** Demonstration pas a pas (memes composants que la partie simple), avec le resultat sous le mot. */
 export function TraceView({ view }: { view: BoxView }) {
   const { trace, original, params } = view
   const total = trace.steps.length

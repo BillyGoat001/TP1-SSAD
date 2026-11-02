@@ -1,5 +1,5 @@
-// Dictionnaire français → anglais, une partie par page (voir i18n/en/*.ts),
-// + les règles pour les messages qui contiennent des valeurs (PATTERNS).
+// Dictionnaire francais → anglais, une partie par page (voir i18n/en/*.ts),
+// + les regles pour les messages qui contiennent des valeurs (PATTERNS).
 import cipher from './en/cipher'
 import files from './en/files'
 import limits from './en/limits'

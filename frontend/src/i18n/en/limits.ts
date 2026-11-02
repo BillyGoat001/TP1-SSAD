@@ -11,7 +11,7 @@ const limits: Record<string, string> = {
   "l'algorithme ne chiffre pas, ou ne permet pas de retrouver le message d'origine.":
     'the algorithm does not encrypt, or the original message cannot be recovered.',
 
-  // ---- César
+  // ---- Cesar
   'César': 'Caesar',
   "Chaque lettre est décalée de k positions dans l'alphabet.": 'Each letter is shifted by k positions in the alphabet.',
   'La clé 13 (ROT13).': 'Key 13 (ROT13).',

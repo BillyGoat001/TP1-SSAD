@@ -1,12 +1,12 @@
-// Preuve de travail du captcha : trouver un nombre n tel que sha256("<défi>:<n>") commence
-// par `bits` zéros (voir backend/captcha.py). Le navigateur y passe quelques dixièmes de
-// seconde ; un robot qui enchaîne des milliers de connexions, lui, paie chaque essai.
+// Preuve de travail du captcha : trouver un nombre n tel que sha256("<defi>:<n>") commence
+// par `bits` zeros (voir backend/captcha.py). Le navigateur y passe quelques dixiemes de
+// seconde ; un robot qui enchaine des milliers de connexions, lui, paie chaque essai.
 //
 // Le calcul tourne dans un Worker (la page reste fluide). Le message tient dans un seul
 // bloc SHA-256 (moins de 56 octets), donc une seule compression par essai.
 
 /** Cherche un nonce dans [start, start + count[. Renvoie -1 si aucun n'y est.
- *  Fonction AUTONOME (rien d'extérieur) : son texte est aussi injecté tel quel dans le Worker. */
+ *  Fonction AUTONOME (rien d'exterieur) : son texte est aussi injecte tel quel dans le Worker. */
 export function powSearch(challenge: string, bits: number, start: number, count: number): number {
   const K = new Uint32Array([
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -52,7 +52,7 @@ export function powSearch(challenge: string, bits: number, start: number, count:
       h = g; g = f; f = e; e = (d + t1) | 0
       d = c; c = b; b = a; a = (t1 + t2) | 0
     }
-    // seul le premier mot du hachage nous intéresse : IV[0] + a
+    // seul le premier mot du hachage nous interesse : IV[0] + a
     const first = (0x6a09e667 + a) >>> 0
     if (first >>> shift === 0) return n
   }
@@ -66,7 +66,7 @@ export interface PowJob {
 
 const CHUNK = 20000
 
-/** Lance la recherche en arrière-plan. `cancel()` l'arrête (captcha fermé ou remplacé). */
+/** Lance la recherche en arriere-plan. `cancel()` l'arrete (captcha ferme ou remplace). */
 export function solvePow(challenge: string, bits: number): PowJob {
   let stopped = false
   let worker: Worker | null = null

@@ -17,7 +17,7 @@
   --yellow: #8a6a00; --yellow-bg: #fdf1b8;
   --orange: #b94a0b; --orange-bg: #fddcc4;
   --radius: 10px;
-  /* échange A ↔ B : orange = A, rose = B (la couleur indique l'auteur) */
+  /* echange A ↔ B : orange = A, rose = B (la couleur indique l'auteur) */
   --ua: #a94f0a; --ua-soft: #fdebdc; --ub: #b5338a; --ub-soft: #f8e1f1;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -86,7 +86,7 @@ code, .mono { font-family: var(--mono); }
 }
 .panel-title { margin: 0 0 4px; font-size: 20px; }
 .panel-sub { margin: 0 0 16px; color: var(--muted); max-width: 62ch; }
-/* page Intégrité : un peu d'air entre la clé et le message de A, et sous le titre */
+/* page Integrite : un peu d'air entre la cle et le message de A, et sous le titre */
 .intg-fields { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
 .intg-error { margin: 10px auto 0; max-width: 480px; text-align: center; }
 .sub-title { margin: 4px 0 6px; font-size: 16px; }
@@ -158,7 +158,7 @@ code, .mono { font-family: var(--mono); }
 .tile.done { color: var(--muted); }
 .tile.current { background: var(--amber-bg); border-color: var(--amber); color: var(--amber); font-weight: 700; }
 .tile.skip { color: var(--muted); font-style: italic; }
-/* entrée en haut, résultat (vert) juste en dessous — utilisé par la partie Échange */
+/* entree en haut, resultat (vert) juste en dessous — utilise par la partie Echange */
 .tiles-io { gap: 8px 6px; }
 .tile-io { display: inline-flex; flex-direction: column; gap: 4px; }
 .tile.tile-out { color: var(--green); background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
@@ -190,7 +190,7 @@ code, .mono { font-family: var(--mono); }
 
 /* ---- Hill ------------------------------------------------------------- */
 .hill-eq { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-/* une grille : chaque colonne prend la largeur de son plus grand nombre, les lignes restent alignées */
+/* une grille : chaque colonne prend la largeur de son plus grand nombre, les lignes restent alignees */
 .hill-matrix { display: inline-grid; grid-template-columns: repeat(var(--n, 2), auto); gap: 4px 10px; border-left: 2px solid var(--fg); border-right: 2px solid var(--fg); padding: 6px 10px; }
 .hill-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; column-gap: 10px; border-radius: 6px; padding: 2px 4px; transition: background 0.2s; }
 .hill-row.is-active { background: var(--amber-bg); }
@@ -397,7 +397,7 @@ code, .mono { font-family: var(--mono); }
 .icon-btn-ico { width: 15px; height: 15px; display: inline-block; vertical-align: -3px; margin-right: 6px; }
 .pw-ind-ico { width: 16px; height: 16px; display: inline-block; vertical-align: -3px; margin-right: 4px; }
 
-/* cible : champ (compteur à droite dedans) + longueur + Générer, tout à droite */
+/* cible : champ (compteur a droite dedans) + longueur + Generer, tout a droite */
 .pw-target { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 10px; }
 .pw-input-wrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 220px; }
 .pw-input { width: 100%; }
@@ -411,14 +411,14 @@ code, .mono { font-family: var(--mono); }
 .pw-slider { flex: 1; min-width: 110px; accent-color: var(--accent); cursor: pointer; }
 .pw-gen { white-space: nowrap; }
 
-/* indicateur de validité : texte seul (pas de boîte colorée) */
+/* indicateur de validite : texte seul (pas de boite coloree) */
 .pw-validity {
   display: flex; align-items: center; gap: 4px; font-size: 13.5px; font-weight: 600; margin: 2px 0 12px;
 }
 .pw-validity.is-ok { color: var(--green); }
 .pw-validity.is-bad { color: var(--red); }
 
-/* scène d'attaque : scramble « film » + barre de progression + bouton stop */
+/* scene d'attaque : scramble « film » + barre de progression + bouton stop */
 .pw-stage {
   display: flex; flex-direction: column; gap: 10px; margin: 12px 0; padding: 18px 20px;
   border: 1px solid var(--border); border-radius: 14px; background: var(--surface-2);
@@ -434,7 +434,7 @@ code, .mono { font-family: var(--mono); }
   animation: pwFlicker .9s linear infinite;
 }
 @keyframes pwFlicker { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
-/* mot de passe trouvé : figé au-dessus de la barre, en vert */
+/* mot de passe trouve : fige au-dessus de la barre, en vert */
 .pw-scramble.pw-found { color: var(--green); font-weight: 700; animation: none; }
 .pw-progress { height: 12px; background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-radius: 999px; overflow: hidden; }
 .pw-progress span {
@@ -491,7 +491,7 @@ code, .mono { font-family: var(--mono); }
 .pw-switch-dot { width: 9px; height: 9px; border-radius: 999px; background: currentColor; opacity: .55; }
 .pw-protect-btn.is-on .pw-switch-dot { opacity: 1; }
 
-/* protection inline : chips + rangée des deux options (sans titres ni explications) */
+/* protection inline : chips + rangee des deux options (sans titres ni explications) */
 .pw-protect-inline {
   display: flex; flex-direction: column; gap: 10px; margin: 2px 0 6px; padding: 12px 14px;
   border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); animation: emerge .3s ease;
@@ -511,7 +511,7 @@ code, .mono { font-family: var(--mono); }
 .pw-chip.is-on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
 .pw-hint { font-size: 12.5px; color: var(--muted); margin: 0; max-width: 64ch; }
 
-/* tableau des durées — disposition fixe (ne déborde jamais) + couleurs vives */
+/* tableau des durees — disposition fixe (ne deborde jamais) + couleurs vives */
 .pw-table-wrap { width: 100%; }
 .pw-table { border-collapse: separate; border-spacing: 4px; width: 100%; table-layout: fixed; }
 .pw-table th.pw-th-len { width: 66px; }
@@ -523,7 +523,7 @@ code, .mono { font-family: var(--mono); }
   font-size: 11.5px; font-weight: 600; border: 1px solid transparent;
   white-space: normal; word-break: break-word;
 }
-/* couleurs vives : fond teinté clair + texte saturé, lisible en clair comme en sombre */
+/* couleurs vives : fond teinte clair + texte sature, lisible en clair comme en sombre */
 .pw-table td.is-instant, .pw-table td.is-faible {
   background: color-mix(in srgb, var(--red) 22%, var(--surface)); color: var(--red);
   border-color: color-mix(in srgb, var(--red) 40%, transparent);
@@ -538,9 +538,9 @@ code, .mono { font-family: var(--mono); }
 }
 .pw-table td.is-current { outline: 2px solid var(--accent); outline-offset: 1px; font-weight: 800; }
 
-/* valeur exacte (jeu réellement détecté + longueur réelle), affichée à part du
-   tableau figé : ses colonnes sont cumulatives (10/26/52/62/86), une composition
-   différente (ex. minuscules+chiffres+symboles sans majuscules) ne tombe sur
+/* valeur exacte (jeu reellement detecte + longueur reelle), affichee a part du
+   tableau fige : ses colonnes sont cumulatives (10/26/52/62/86), une composition
+   differente (ex. minuscules+chiffres+symboles sans majuscules) ne tombe sur
    aucune d'elles exactement. */
 .pw-table-exact {
   margin-top: 8px; padding: 8px 12px; border-radius: 10px; font-size: 12px;
@@ -579,7 +579,7 @@ code, .mono { font-family: var(--mono); }
 .subtab.is-active { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
 .subtab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ================= Échange entre deux personnes (RSA, P2) ================= */
+/* ================= Echange entre deux personnes (RSA, P2) ================= */
 :root {
   --ex-lock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='9' rx='2'/%3E%3Cpath d='M8 11V7.5a4 4 0 0 1 8 0V11'/%3E%3C/svg%3E");
 }
@@ -596,7 +596,7 @@ code, .mono { font-family: var(--mono); }
 .ex-avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--surface); background: var(--c); }
 .ex-avatar svg { width: 16px; height: 16px; display: block; }
 
-/* champs de clés : la clé générée est affichée dans son champ */
+/* champs de cles : la cle generee est affichee dans son champ */
 .ex-keys { display: flex; flex-direction: column; gap: 7px; }
 .ex-kp {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0;
@@ -647,23 +647,23 @@ code, .mono { font-family: var(--mono); }
 }
 .ex-minput:focus { outline: 2px solid var(--c); outline-offset: 1px; }
 .ex-textarea { display: block; resize: vertical; min-height: 7.5em; max-height: 55vh; line-height: 1.55; letter-spacing: .5px; overflow-y: auto; }
-/* les exemples (« ex. 3 », « ex. PLAYFAIR », les points des cases de la matrice) ont tous la couleur de l'utilisateur, estompée */
+/* les exemples (« ex. 3 », « ex. PLAYFAIR », les points des cases de la matrice) ont tous la couleur de l'utilisateur, estompee */
 .ex-textarea::placeholder, .ex-shift::placeholder, .ex-tint::placeholder, .ex-card .matrix-cell::placeholder { color: var(--c); opacity: .5; font-weight: 500; }
-/* champs de message (à envoyer, reçus) : même système que le champ du message clair — ils grandissent avec le texte
-   jusqu'à la même hauteur maximale, puis défilent à l'intérieur au lieu d'allonger la carte */
+/* champs de message (a envoyer, recus) : meme systeme que le champ du message clair — ils grandissent avec le texte
+   jusqu'a la meme hauteur maximale, puis defilent a l'interieur au lieu d'allonger la carte */
 .ex-val {
   font-family: var(--mono); font-size: 13.5px; font-weight: 600; min-height: 36px; max-height: 55vh; padding: 7px 10px;
   display: flex; align-items: center; align-items: safe center; word-break: break-all; white-space: pre-wrap; border-radius: 9px;
   overflow-y: auto;
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); background: var(--cs); color: var(--c);
 }
-.ex-val:not(.is-cipher) { word-break: normal; overflow-wrap: anywhere; } /* texte en clair : retour à la ligne entre les mots, comme dans le champ clair */
+.ex-val:not(.is-cipher) { word-break: normal; overflow-wrap: anywhere; } /* texte en clair : retour a la ligne entre les mots, comme dans le champ clair */
 .ex-val.is-cipher { border-style: dashed; }
 .ex-val.is-cipher::before, .ex-pill.is-cipher::before {
   content: ""; width: 14px; height: 14px; flex: none; margin-right: 8px; background: currentColor;
   -webkit-mask: var(--ex-lock) center / contain no-repeat; mask: var(--ex-lock) center / contain no-repeat;
 }
-/* dans un long chiffré, le cadenas reste en haut à gauche pendant que le texte défile */
+/* dans un long chiffre, le cadenas reste en haut a gauche pendant que le texte defile */
 .ex-val.is-cipher::before { align-self: flex-start; position: sticky; top: 7px; margin-top: calc((1lh - 14px) / 2); }
 .ex-val.is-flash { animation: exFlash .8s ease; }
 @keyframes exFlash { 0% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--c) 35%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
@@ -674,7 +674,7 @@ code, .mono { font-family: var(--mono); }
 .ex-sep { height: 1px; background: var(--border); margin: 3px 0; }
 .ex-card .warn { margin: 0; font-size: 13px; }
 
-/* boîte de chiffrement / déchiffrement floutée (même style que la partie simple) */
+/* boite de chiffrement / dechiffrement floutee (meme style que la partie simple) */
 .demo-box.ex-box { margin-top: 0; min-height: 210px; }
 @keyframes exCondense { from { opacity: 0; filter: blur(7px); transform: translateY(5px); } to { opacity: 1; filter: none; transform: none; } }
 .ex-box .msg-dissolve { top: 46px; left: 20px; right: 20px; flex-wrap: wrap; row-gap: 4px; color: var(--c); font-size: 17px; }
@@ -686,7 +686,7 @@ code, .mono { font-family: var(--mono); }
 .ex-emerge { position: absolute; top: 42px; left: 18px; right: 18px; z-index: 5; display: flex; justify-content: center; pointer-events: none; }
 .ex-emerge .sortie { margin-top: 0; max-width: 100%; justify-content: center; box-shadow: 0 10px 26px rgba(0, 0, 0, .14); }
 .ex-emerge .result-text { flex: 0 1 auto; font-size: 15px; }
-/* le résultat qui sort de la boîte garde la couleur de l'utilisateur jusqu'à son champ : le vert reste dans la démonstration */
+/* le resultat qui sort de la boite garde la couleur de l'utilisateur jusqu'a son champ : le vert reste dans la demonstration */
 .ex-emerge .sortie { background: var(--cs); border-color: var(--c); animation-duration: calc(.7s * var(--tm, 1)); }
 .ex-emerge .sortie .output-label, .ex-emerge .sortie .result-text { color: var(--c); }
 .ex-emerge .sortie.is-cipher { border-style: dashed; }
@@ -705,8 +705,8 @@ code, .mono { font-family: var(--mono); }
 .ex-row-l { color: var(--muted); font-size: 12px; }
 .ex-note { color: var(--muted); font-size: 12.5px; margin: 0; }
 .ex-note code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; color: var(--fg); }
-/* chiffrer : couleur de l'utilisateur ; déchiffrer : couleur de l'autre (l'auteur
-   du message, posée sur la boîte). Le résultat garde le vert. */
+/* chiffrer : couleur de l'utilisateur ; dechiffrer : couleur de l'autre (l'auteur
+   du message, posee sur la boite). Le resultat garde le vert. */
 .ex-box .alpha-col.is-active { background: var(--cs); }
 .ex-box .alpha-col.is-active .alpha-cell.in { color: var(--c); }
 .ex-box .focus-in { background: var(--cs); color: var(--c); }
@@ -721,7 +721,7 @@ code, .mono { font-family: var(--mono); }
 .ex-box .ha-col.is-active .ha-letter, .ex-box .ha-col.is-active .ha-num { color: var(--c); }
 .ex-box .prep-digrams { color: var(--c); }
 
-/* le canal au centre : bouton de génération, puis l'espion */
+/* le canal au centre : bouton de generation, puis l'espion */
 .ex-lane { position: sticky; top: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 160px; }
 .ex-gen { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .ex-size { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--bg); padding: 0 2px; }
@@ -736,7 +736,7 @@ code, .mono { font-family: var(--mono); }
 .ex-genbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .ex-gen-err { max-width: 96px; font-size: 11px; line-height: 1.3; text-align: center; color: var(--red); background: var(--bg); }
 
-/* scène des flotteurs : coffre, clé, étiquettes */
+/* scene des flotteurs : coffre, cle, etiquettes */
 .ex-stage { position: absolute; inset: 0; pointer-events: none; z-index: 30; overflow: visible; }
 .ex-float { position: absolute; top: 0; left: 0; will-change: transform; }
 .ex-float.ex-lift { filter: drop-shadow(0 12px 22px rgba(0, 0, 0, .2)); }
@@ -762,7 +762,7 @@ code, .mono { font-family: var(--mono); }
 .ex-float.ex-keyf { width: 38px; height: 38px; z-index: 3; color: var(--c); filter: drop-shadow(0 0 2px var(--surface)) drop-shadow(0 0 1px var(--surface)) drop-shadow(0 6px 10px rgba(0, 0, 0, .3)); }
 .ex-keyf svg { width: 100%; height: 100%; display: block; transform-origin: 50% 50%; }
 
-/* Protocole RSA : seul le titre se voit ; un clic déroule les explications */
+/* Protocole RSA : seul le titre se voit ; un clic deroule les explications */
 .panel.ex-proto { margin-top: 18px; padding: 0; }
 .ex-proto-title { margin: 0; font-size: 16px; }
 .ex-proto-head {
@@ -793,14 +793,14 @@ code, .mono { font-family: var(--mono); }
 .ex-full { display: flex; flex-direction: column; gap: 1px; }
 .ex-full code { font-size: 11.5px; word-break: break-all; color: var(--fg); }
 
-/* ---- conversation A ↔ B, façon messagerie : la fenêtre au centre, et pour
-   chaque message une bulle d'explication (algo + clé) reliée par un trait */
+/* ---- conversation A ↔ B, facon messagerie : la fenetre au centre, et pour
+   chaque message une bulle d'explication (algo + cle) reliee par un trait */
 .ex-chat { margin-top: 22px; }
 .ex-chat-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 560px) minmax(0, 1fr); align-items: center; }
 .ex-chat-window { grid-column: 2; align-self: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 24px; box-shadow: 0 18px 44px rgba(31, 26, 46, .07); }
 .ex-chat-head, .ex-chat-row, .ex-chat-foot { grid-column: 2; position: relative; z-index: 1; min-width: 0; }
 .ex-chat-head { align-self: stretch; display: flex; align-items: center; gap: 11px; padding: 13px 16px; border-bottom: 1px solid var(--border); }
-.ex-chat-head.is-empty { border-bottom-color: transparent; } /* pas encore de message : pas de trait sous l'en-tête */
+.ex-chat-head.is-empty { border-bottom-color: transparent; } /* pas encore de message : pas de trait sous l'en-tete */
 .ex-chat-avatars { display: inline-flex; flex: none; }
 .ex-chat-avatars .ex-avatar + .ex-avatar { margin-left: -9px; box-shadow: 0 0 0 2px var(--surface); }
 .ex-chat-title { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
@@ -811,7 +811,7 @@ code, .mono { font-family: var(--mono); }
   border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); transition: background .2s, color .2s, border-color .2s;
 }
 .ex-chat-toggle:hover { border-color: var(--accent); }
-/* supprimer le chat : discret, à gauche du bouton « Voir chiffré » */
+/* supprimer le chat : discret, a gauche du bouton « Voir chiffre » */
 .ex-chat-del {
   margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
   font: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 12px; border-radius: 999px;
@@ -823,7 +823,7 @@ code, .mono { font-family: var(--mono); }
 @media (max-width: 560px) { .ex-chat-del-text { display: none; } .ex-chat-del { padding: 7px 9px; } }
 .ex-chat-toggle.is-on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .ex-chat-toggle svg { width: 14px; height: 14px; }
-/* les deux libellés occupent la même case : le bouton prend la largeur du plus long, dans les deux vues */
+/* les deux libelles occupent la meme case : le bouton prend la largeur du plus long, dans les deux vues */
 .ex-tog { grid-area: 1 / 1; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: opacity .2s ease; }
 .ex-tog.is-off { opacity: 0; visibility: hidden; }
 .ex-chat-row { display: flex; align-items: flex-end; gap: 8px; padding: 3px 16px; }
@@ -843,20 +843,20 @@ code, .mono { font-family: var(--mono); }
 }
 .ex-chat-row.is-a .ex-bubble { border-bottom-left-radius: 6px; }
 .ex-chat-row.is-b .ex-bubble { border-bottom-right-radius: 6px; }
-/* en chiffré, le contour en pointillés se fond par-dessus le trait plein (même épaisseur : rien ne bouge) */
+/* en chiffre, le contour en pointilles se fond par-dessus le trait plein (meme epaisseur : rien ne bouge) */
 .ex-bubble::after {
   content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
   border: 1px dashed color-mix(in srgb, var(--c) 32%, transparent); opacity: 0; transition: opacity .35s ease;
 }
 .ex-bubble.is-cipher { border-color: transparent; }
 .ex-bubble.is-cipher::after { opacity: 1; }
-/* le texte clair et le texte chiffré sont empilés dans la même case : la bulle prend la taille du plus grand,
+/* le texte clair et le texte chiffre sont empiles dans la meme case : la bulle prend la taille du plus grand,
    dans les deux vues, donc elle ne change jamais de taille quand on bascule */
 .ex-bubble-layer {
   grid-area: 1 / 1; align-self: center; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere;
   transition: opacity .35s ease, filter .35s ease, transform .35s ease;
 }
-.ex-bubble-layer.is-secret { font-family: var(--mono); font-size: 13px; color: var(--c); word-break: break-all; } /* un long chiffré se coupe n'importe où : il commence juste après le cadenas, sans lui laisser une ligne à lui seul */
+.ex-bubble-layer.is-secret { font-family: var(--mono); font-size: 13px; color: var(--c); word-break: break-all; } /* un long chiffre se coupe n'importe ou : il commence juste apres le cadenas, sans lui laisser une ligne a lui seul */
 .ex-bubble-layer.is-off {
   opacity: 0; filter: blur(6px); transform: translateY(4px); visibility: hidden;
   transition: opacity .35s ease, filter .35s ease, transform .35s ease, visibility 0s .35s;
@@ -864,7 +864,7 @@ code, .mono { font-family: var(--mono); }
 .ex-bubble-lock { display: inline-block; width: 13px; height: 13px; margin-right: 7px; vertical-align: -2px; }
 .ex-bubble-lock svg { width: 100%; height: 100%; display: block; }
 .ex-bubble-cap { display: none; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
-.ex-chat-foot { align-self: stretch; height: 14px; } /* un peu d'air sous la dernière bulle */
+.ex-chat-foot { align-self: stretch; height: 14px; } /* un peu d'air sous la derniere bulle */
 .ex-side {
   display: flex; align-items: center; justify-content: flex-end; min-width: 0;
   opacity: 0; visibility: hidden; pointer-events: none; transform: translateX(var(--sx, 0));
@@ -872,7 +872,7 @@ code, .mono { font-family: var(--mono); }
 }
 .ex-side-l { grid-column: 1; --sx: 16px; }
 .ex-side-r { grid-column: 3; flex-direction: row-reverse; --sx: -16px; }
-/* vue chiffrée : elles apparaissent l'une après l'autre */
+/* vue chiffree : elles apparaissent l'une apres l'autre */
 .ex-chat-grid.is-cipher .ex-side {
   opacity: 1; visibility: visible; pointer-events: auto; transform: none;
   transition: opacity .45s ease var(--d, 0ms), transform .45s ease var(--d, 0ms), visibility 0s;
@@ -884,7 +884,7 @@ code, .mono { font-family: var(--mono); }
 }
 .ex-callout-algo { font-size: 13px; font-weight: 700; color: var(--c); }
 .ex-callout-key { font-family: var(--mono); font-size: 12px; color: var(--fg); overflow-wrap: anywhere; }
-/* le trait sort de la fenêtre (point) et pointe vers la bulle d'explication (flèche) */
+/* le trait sort de la fenetre (point) et pointe vers la bulle d'explication (fleche) */
 .ex-link { position: relative; flex: none; width: clamp(30px, 5vw, 92px); height: 2px; background: color-mix(in srgb, var(--c) 60%, transparent); }
 .ex-link::before { content: ""; position: absolute; top: 50%; transform: translateY(-50%); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
 .ex-side-l .ex-link::before { left: -1px; border-right: 8px solid var(--c); }
@@ -896,7 +896,7 @@ code, .mono { font-family: var(--mono); }
 @media (max-width: 760px) {
   .ex-chat-grid { grid-template-columns: 0 minmax(0, 1fr) 0; }
   .ex-side { display: none; }
-  /* la légende garde sa place même cachée : la fenêtre ne change pas de taille quand on bascule */
+  /* la legende garde sa place meme cachee : la fenetre ne change pas de taille quand on bascule */
   .ex-bubble-cap { display: block; visibility: hidden; }
   .ex-chat-grid.is-cipher .ex-bubble-cap { visibility: visible; }
 }
@@ -907,10 +907,10 @@ code, .mono { font-family: var(--mono); }
   .ex-float.ex-chest { width: 56px; height: 56px; }
 }
 
-/* ===== Chiffrer un message : deux stations strictement symétriques =====
-   Les deux cartes partagent les MÊMES six lignes (sous-grille) : titre, algorithme + clé,
-   champ d'entrée, bouton, démonstration floutée, champ de sortie. Chaque ligne a donc la
-   même hauteur des deux côtés, quoi que contienne chaque station (matrice Hill, erreur…). */
+/* ===== Chiffrer un message : deux stations strictement symetriques =====
+   Les deux cartes partagent les MEMES six lignes (sous-grille) : titre, algorithme + cle,
+   champ d'entree, bouton, demonstration floutee, champ de sortie. Chaque ligne a donc la
+   meme hauteur des deux cotes, quoi que contienne chaque station (matrice Hill, erreur…). */
 .cp-stations {
   margin-top: 14px;
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -929,13 +929,13 @@ code, .mono { font-family: var(--mono); }
   font-size: 14px; font-weight: 700; color: var(--c);
 }
 
-/* algorithme + clé */
+/* algorithme + cle */
 .cp-cfg { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; align-content: flex-start; min-width: 0; }
 .cp-cfg .field { min-width: 0; max-width: 100%; }
 .cp-cfg .field.grow { flex: 1 1 160px; }
 .cp-cfg .hill-input { flex: 1 1 100%; min-width: 0; }
 
-/* champs d'entrée / de sortie : même boîte des deux côtés */
+/* champs d'entree / de sortie : meme boite des deux cotes */
 .cp-input, .cp-output { min-width: 0; }
 .cp-input > .cp-io, .cp-output > .cp-io { flex: 1; }
 .cp-io {
@@ -946,31 +946,31 @@ code, .mono { font-family: var(--mono); }
   font-family: var(--mono); font-size: 16px; letter-spacing: 1px; line-height: 1.5;
   transition: background-color 1.2s ease, border-color 1.2s ease, color 1.2s ease;
 }
-/* le champ de message grandit avec le texte (hauteur posée en JS), puis défile au-delà de 55 % de l'écran */
+/* le champ de message grandit avec le texte (hauteur posee en JS), puis defile au-dela de 55 % de l'ecran */
 .cp-input > textarea.cp-io { flex: none; }
 textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y: auto; line-height: 1.55; }
 .cp-out .result-text { align-self: center; }
 .cp-placeholder { color: var(--muted); font-family: var(--ui); font-size: 14px; letter-spacing: 0; opacity: .85; }
-/* un résultat qui vient d'arriver : vert tout de suite, puis retour doux à l'aspect normal */
+/* un resultat qui vient d'arriver : vert tout de suite, puis retour doux a l'aspect normal */
 .cp-station .cp-io.is-fresh { background: var(--green-bg); border-color: var(--green); color: var(--green); transition: none; }
 
-/* bouton + messages (rouge : mauvais algo / mauvaise clé, champ vide…) */
+/* bouton + messages (rouge : mauvais algo / mauvaise cle, champ vide…) */
 .cp-act { display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 8px 12px; min-width: 0; }
 .cp-act .warn { margin: 0; flex: 1 1 210px; min-width: 0; padding: 7px 12px; }
 
-/* démonstration floutée : même cadre des deux côtés, même vide avant le premier calcul */
+/* demonstration floutee : meme cadre des deux cotes, meme vide avant le premier calcul */
 .cp-demo { margin-top: 0; min-height: 230px; }
 .cp-demo.is-empty {
   display: grid; place-items: center; text-align: center;
   border-style: dashed; background: transparent; color: var(--muted); font-size: 14px;
 }
 
-/* sur fond de carte, les champs restent blancs pour bien se détacher */
+/* sur fond de carte, les champs restent blancs pour bien se detacher */
 .cp-station .text-input, .cp-station .text-area, .cp-station .segmented, .cp-station .matrix-cell { background: var(--surface); }
 .cp-station .matrix-cell.invalid { background: var(--red-bg); }
 .cp-station .seg.is-on { background: var(--accent); }
 
-/* écran étroit : les deux stations s'empilent (même squelette, l'une sous l'autre) */
+/* ecran etroit : les deux stations s'empilent (meme squelette, l'une sous l'autre) */
 @media (max-width: 900px) {
   .cp-stations { grid-template-columns: minmax(0, 1fr); row-gap: 16px; }
   .cp-station { grid-row: auto; display: flex; flex-direction: column; gap: 14px; }
@@ -979,10 +979,10 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
   .cp-station { grid-row: auto; display: flex; flex-direction: column; gap: 14px; }
 }
 
-/* ===== Page « Chiffrer un message » : cartes empilées, temps, historique, limites ===== */
+/* ===== Page « Chiffrer un message » : cartes empilees, temps, historique, limites ===== */
 .cp-page { display: flex; flex-direction: column; gap: 16px; }
 
-/* ligne d'étiquette d'un champ de sortie, avec le temps de calcul à droite */
+/* ligne d'etiquette d'un champ de sortie, avec le temps de calcul a droite */
 .cp-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
 .cp-time {
   font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--muted);
@@ -990,7 +990,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
   padding: 0 9px; line-height: 1.6; white-space: nowrap;
 }
 
-/* import d'UN fichier (clé ou message) : bouton, confirmation verte, avertissement rouge */
+/* import d'UN fichier (cle ou message) : bouton, confirmation verte, avertissement rouge */
 .cp-file-input { display: none; }
 .btn.cp-file-btn {
   position: relative; display: inline-flex; align-items: center; justify-content: center;
@@ -998,7 +998,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
   background: transparent; color: var(--muted); border-color: transparent;
 }
 .btn.cp-file-btn:hover, .btn.cp-file-btn:focus-visible { color: var(--accent); border-color: var(--border); background: var(--surface); }
-/* info-bulle instantanée (le titre du bouton), alignée à droite pour ne jamais sortir de la carte */
+/* info-bulle instantanee (le titre du bouton), alignee a droite pour ne jamais sortir de la carte */
 .cp-file-btn::after {
   content: attr(data-tip); position: absolute; z-index: 20; right: 0; bottom: calc(100% + 6px);
   padding: 4px 9px; border-radius: 6px; white-space: nowrap; pointer-events: none;
@@ -1007,9 +1007,9 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
   opacity: 0; transform: translateY(3px); transition: opacity .12s ease, transform .12s ease;
 }
 .cp-file-btn:hover::after, .cp-file-btn:focus-visible::after { opacity: 1; transform: none; }
-/* icône « fichier » du message : hors du champ, tout en bas à droite */
+/* icone « fichier » du message : hors du champ, tout en bas a droite */
 .cp-file-row { display: flex; justify-content: flex-end; margin-top: -2px; }
-/* icône de la clé : comme celle du message — sur sa propre ligne, juste sous les champs, alignée à droite */
+/* icone de la cle : comme celle du message — sur sa propre ligne, juste sous les champs, alignee a droite */
 .cp-cfg .cp-file-field { flex: 1 1 100%; display: flex; flex-direction: row; justify-content: flex-end; margin-top: -4px; }
 .cp-file-ok { flex: 1 1 100%; color: var(--green); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .cp-file-warn {
@@ -1030,7 +1030,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
   background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
 }
 
-/* sections dépliantes (Historique, Limites et Failles) */
+/* sections depliantes (Historique, Limites et Failles) */
 .cp-fold { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
 .cp-fold > summary {
   display: flex; align-items: center; gap: 10px; padding: 15px 20px; cursor: pointer;
@@ -1090,7 +1090,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
 .cp-lf-sub.is-flaw { color: var(--red); }
 .cp-lf-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
 .cp-lf-list li::marker { color: var(--muted); }
-/* définitions « Limite » / « Faille » en tête de section */
+/* definitions « Limite » / « Faille » en tete de section */
 .cp-lf-def { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0 0 16px; padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; font-size: 14px; }
 .cp-lf-def > div { display: flex; gap: 8px; align-items: baseline; flex: 1 1 320px; min-width: 0; }
 .cp-lf-def dt { margin: 0; flex: none; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
@@ -1107,7 +1107,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
   .msg-dissolve, .fog-ripple { display: none !important; }
 }
 
-/* ---- Mots de passe : horloge de l'attaque, historique, champs figés pendant l'attaque ---- */
+/* ---- Mots de passe : horloge de l'attaque, historique, champs figes pendant l'attaque ---- */
 .pw-clock { font-size: 13px; color: var(--muted); }
 .pw-clock strong { font-family: var(--mono); color: var(--fg); font-weight: 700; }
 .pw-hist-fold { margin-top: 14px; }
@@ -1117,7 +1117,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
 .pw-input:disabled, .pw-num:disabled, .pw-slider:disabled { opacity: .6; cursor: not-allowed; }
 .seg:disabled, .pw-chip:disabled, .pw-pill:disabled, .pw-protect-btn:disabled { opacity: .6; cursor: not-allowed; }
 
-/* tableaux d'historique : texte long replié par « … », déplié au clic */
+/* tableaux d'historique : texte long replie par « … », deplie au clic */
 .cp-hist-mono.is-exp { cursor: pointer; }
 .cp-hist-mono.is-exp:hover { background: var(--surface-2); }
 .cp-hist-mono.is-exp:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -1125,7 +1125,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
   max-width: 46ch; white-space: normal; overflow: visible; text-overflow: clip;
   overflow-wrap: anywhere; line-height: 1.5;
 }
-/* colonne Protection : pastilles, les courtes côte à côte, les longues seules sur leur ligne */
+/* colonne Protection : pastilles, les courtes cote a cote, les longues seules sur leur ligne */
 .cp-hist td.pw-hist-prot { white-space: normal; min-width: 150px; max-width: 270px; }
 .pw-pills { display: flex; flex-wrap: wrap; gap: 4px; }
 .pw-pill-tag {
@@ -1135,7 +1135,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
 }
 .pw-pill-tag.is-none { color: var(--muted); background: var(--surface-2); font-weight: 500; }
 
-/* ---- en-tête : choix de la langue (FR | EN) à côté du thème ---- */
+/* ---- en-tete : choix de la langue (FR | EN) a cote du theme ---- */
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .lang-switch {
   display: flex; height: 40px; padding: 3px; gap: 2px; border-radius: var(--radius);
@@ -1149,10 +1149,10 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
 .lang-opt.is-on { background: var(--accent); color: var(--accent-fg); }
 .lang-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* ==== Connexion : page, logo animé, fenêtre de captcha ================================ */
+/* ==== Connexion : page, logo anime, fenetre de captcha ================================ */
 .boot { min-height: 100vh; display: grid; place-items: center; }
 
-/* ---- la page : fond animé (orbes, grille sous le curseur) ---- */
+/* ---- la page : fond anime (orbes, grille sous le curseur) ---- */
 .login {
   position: relative; min-height: 100vh; display: grid; place-items: center; padding: 28px 16px;
   overflow: hidden; isolation: isolate; --mx: 50%; --my: 34%;
@@ -1184,7 +1184,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
   transition: opacity .35s;
 }
 .glyph-field { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-/* le curseur est sur la carte ou un bouton : la lumière est bloquée, elle s'éteint */
+/* le curseur est sur la carte ou un bouton : la lumiere est bloquee, elle s'eteint */
 .login[data-blocked] .login-spot, .login[data-blocked] .login-grid { opacity: 0; }
 .login-top {
   position: absolute; top: 18px; right: clamp(16px, 3vw, 32px); z-index: 2;
@@ -1249,7 +1249,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
 .lock-mark.is-error .lock-tile { animation: lock-shake .6s cubic-bezier(.36, .07, .19, .97) both; }
 .lock-mark.is-error .lk-inner, .lock-mark.is-error .lk-hole { fill: var(--red); }
 @keyframes lock-shake { 10%, 90% { transform: translateX(-2px); } 20%, 80% { transform: translateX(5px); } 30%, 50%, 70% { transform: translateX(-9px); } 40%, 60% { transform: translateX(9px); } }
-/* accès accordé */
+/* acces accorde */
 .lock-mark.is-open .lk-shackle { transform: translateY(-1.9px) rotate(-36deg); }
 .lock-mark.is-open .lk-inner, .lock-mark.is-open .lk-hole { fill: var(--green); }
 .lock-mark.is-open .lock-tile { animation: lock-pop .8s cubic-bezier(.2, 1.4, .4, 1) both; }
@@ -1338,7 +1338,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
 .login-btn-arrow { transition: transform .25s; }
 .login-btn:hover:not(:disabled) .login-btn-arrow { transform: translateX(5px); }
 
-/* ---- la fenêtre de vérification ---- */
+/* ---- la fenetre de verification ---- */
 .cap-overlay {
   position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px;
   background: rgba(12, 8, 28, .58); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: fade-in .25s both;
@@ -1406,7 +1406,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
 .cap-timer { height: 3px; background: var(--surface-2); }
 .cap-timer span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #ff7ac6); transition: width .2s linear; }
 
-/* ---- défi « la clé et les cadenas » ---- */
+/* ---- defi « la cle et les cadenas » ---- */
 .shuf { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .shuf-stage { position: relative; height: 150px; }
 .shuf-lock {
@@ -1435,7 +1435,7 @@ textarea.cp-io { display: block; resize: vertical; max-height: 55vh; overflow-y:
 .shuf-caption { margin: 0; min-height: 22px; text-align: center; font-size: 13.5px; color: var(--muted); transition: color .3s; }
 .shuf.is-pick .shuf-caption { color: var(--accent); font-weight: 650; }
 
-/* ---- l'appli apparaît après la connexion ; bouton de déconnexion ---- */
+/* ---- l'appli apparait apres la connexion ; bouton de deconnexion ---- */
 .app.is-entering .app-header { animation: head-in .7s cubic-bezier(.2, .9, .25, 1) backwards; }
 .app.is-entering .brand-mark { animation: lock-pop .9s .15s cubic-bezier(.2, 1.4, .4, 1) backwards; }
 .app.is-entering .tabs { animation: fade-up .7s .12s cubic-bezier(.2, .9, .25, 1) backwards; }

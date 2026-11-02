@@ -1,7 +1,7 @@
-// Messages envoyés par le backend Python (toujours en français) et textes rangés en
-// français dans les fichiers (historiques) : traduits ici, au moment de l'affichage.
+// Messages envoyes par le backend Python (toujours en francais) et textes ranges en
+// francais dans les fichiers (historiques) : traduits ici, au moment de l'affichage.
 const backend: Record<string, string> = {
-  // ---- avertissements de clés faibles (encryption.py)
+  // ---- avertissements de cles faibles (encryption.py)
   'Décalage nul (clé = 0 ou un multiple de 26) : le message ressortirait identique, il ne serait pas chiffré.':
     'Zero shift (key = 0 or a multiple of 26): the message would come out unchanged, it would not be encrypted.',
   "La clé 13 (ROT13) est faible : l'appliquer deux fois redonne le message d'origine, et c'est une convention très connue.":
@@ -33,7 +33,7 @@ const backend: Record<string, string> = {
   "Mode d'emploi illisible : le coffre n'a pas été ouvert avec la bonne clé privée.":
     'Unreadable instructions: the chest was not opened with the right private key.',
 
-  // ---- page Mots de passe : tableau des durées (passwords.py)
+  // ---- page Mots de passe : tableau des durees (passwords.py)
   'Chiffres': 'Digits',
   'Minuscules': 'Lowercase',
   '+ Majusc.': '+ Uppercase',
@@ -43,13 +43,13 @@ const backend: Record<string, string> = {
   'instantané': 'instant',
   "moins d'une seconde": 'less than a second',
 
-  // ---- protections rangées dans l'historique des attaques
+  // ---- protections rangees dans l'historique des attaques
   'Aucune': 'None',
   'symboles': 'symbols',
   'sans indice': 'no hint',
 }
 
-// unités de durée (passwords.py → human_time) : « 3 jours », « 6 mois », « 1 millénaire »…
+// unites de duree (passwords.py → human_time) : « 3 jours », « 6 mois », « 1 millenaire »…
 const UNIT: Record<string, [string, string]> = {
   s: ['s', 's'], min: ['min', 'min'], h: ['h', 'h'], j: ['d', 'd'],
   jour: ['day', 'days'], jours: ['day', 'days'], mois: ['month', 'months'],
@@ -57,13 +57,13 @@ const UNIT: Record<string, [string, string]> = {
   'siècle': ['century', 'centuries'], 'siècles': ['century', 'centuries'],
   'millénaire': ['millennium', 'millennia'], 'millénaires': ['millennium', 'millennia'],
 }
-// « 500 000 000 000 » (espaces français) → « 500,000,000,000 »
+// « 500 000 000 000 » (espaces francais) → « 500,000,000,000 »
 const enNumber = (s: string) => s.replace(/[\s  ]/g, ',').replace(/,(?=\d{1,2}$)/, '.')
 
 export const BACKEND_PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
-  // verrouillage de la connexion : « Trop de tentatives. Réessaie dans 15 s. »
+  // verrouillage de la connexion : « Trop de tentatives. Reessaie dans 15 s. »
   [/^Trop de tentatives\. Réessaie dans (\d+) s\.$/, (m) => `Too many attempts. Try again in ${m[1]} s.`],
-  // durées
+  // durees
   [/^(\d+(?:,\d+)?) (s|min|h|j|jours?|mois|ans?|siècles?|millénaires?)$/, (m) => {
     const n = m[1].replace(',', '.')
     const [one, many] = UNIT[m[2]]

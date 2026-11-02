@@ -52,7 +52,7 @@ app.add_middleware(
 
 # ------------------------------------------------------------- connexion ----
 # Toute l'API (/api/…) exige une session ouverte, sauf /api/auth/* (se connecter) et
-# /api/health. Les fichiers de l'appli (la page de connexion elle-même) restent publics.
+# /api/health. Les fichiers de l'appli (la page de connexion elle-meme) restent publics.
 @app.middleware("http")
 async def _guard(request: Request, call_next):
     path = request.url.path
@@ -78,11 +78,11 @@ class CipherRequest(BaseModel):
     direction: str = "right"              # caesar
     key: Optional[str] = None             # playfair
     matrix: Optional[List[List[int]]] = None  # hill
-    # mise en forme (déchiffrement) : masque des espaces + positions des X ajoutés
+    # mise en forme (dechiffrement) : masque des espaces + positions des X ajoutes
     layout: Optional[List[List[Any]]] = None
     fillers: Optional[List[int]] = None
     jmap: Optional[List[int]] = None       # Playfair : positions des J d'origine (J→I)
-    cases: Optional[List[int]] = None      # positions des lettres écrites en minuscules
+    cases: Optional[List[int]] = None      # positions des lettres ecrites en minuscules
 
 
 class WarningRequest(BaseModel):
@@ -106,7 +106,7 @@ class BruteRequest(BaseModel):
     length: Optional[int] = None
     limit: Optional[int] = None         # limite de tentatives (verrouillage)
     rules: Optional[Rules] = None       # politique (cas complexe)
-    know_composition: bool = True       # l'attaquant connaît-il la composition ?
+    know_composition: bool = True       # l'attaquant connait-il la composition ?
 
 
 class DictRequest(BaseModel):
@@ -152,14 +152,14 @@ class IntegrityDemoRequest(BaseModel):
 class IntegritySealRequest(BaseModel):
     key: str
     message: str
-    encrypt: bool = True     # False = le message voyage en clair (démontre que chiffrement ≠ intégrité)
+    encrypt: bool = True     # False = le message voyage en clair (demontre que chiffrement ≠ integrite)
 
 
 class IntegrityOpenRequest(BaseModel):
     key: str
-    record: Dict[str, Any]       # tel que renvoyé par /api/integrity/seal (son "secret" peut avoir été modifié par C)
+    record: Dict[str, Any]       # tel que renvoye par /api/integrity/seal (son "secret" peut avoir ete modifie par C)
     protect: bool
-    tag: Optional[str] = None    # l'étiquette envoyée par A (ignorée si protect=False)
+    tag: Optional[str] = None    # l'etiquette envoyee par A (ignoree si protect=False)
 
 
 class KeygenRequest(BaseModel):
@@ -167,19 +167,19 @@ class KeygenRequest(BaseModel):
 
 
 class SealRequest(BaseModel):
-    # le mode d'emploi à enfermer (mêmes champs que /api/cipher)…
+    # le mode d'emploi a enfermer (memes champs que /api/cipher)…
     algo: str
     shift: Optional[int] = None
     direction: str = "right"
     key: Optional[str] = None
     matrix: Optional[List[List[int]]] = None
-    # …et la clé publique du destinataire (grands nombres en texte)
+    # …et la cle publique du destinataire (grands nombres en texte)
     n: str
     e: str
 
 
 class OpenRequest(BaseModel):
-    # la clé privée du destinataire + les blocs chiffrés du coffre
+    # la cle privee du destinataire + les blocs chiffres du coffre
     n: str
     d: str
     blocks: List[str]
@@ -189,26 +189,26 @@ class OpenRequest(BaseModel):
 class HistoryEntryIn(BaseModel):
     op: Literal["encrypt", "decrypt"]
     clear: str = Field(max_length=5000)        # message clair
-    cipher: str = Field(max_length=5000)       # message chiffré
+    cipher: str = Field(max_length=5000)       # message chiffre
     algo: Literal["caesar", "playfair", "hill"]
     algoLabel: str = Field(max_length=40)
-    key: str = Field(max_length=2000)          # la clé, en texte lisible
+    key: str = Field(max_length=2000)          # la cle, en texte lisible
     timeUs: Optional[float] = None             # temps de calcul (µs)
 
 
 class PwHistoryIn(BaseModel):
     attack: Literal["brute", "dict"]                       # type d'attaque
     case: Literal["binaire", "numerique", "complexe"]
-    password: str = Field(max_length=200)                   # le mot de passe visé
-    protection: str = Field(max_length=300)                 # résumé : « Aucune », « 5 tentatives max »…
+    password: str = Field(max_length=200)                   # le mot de passe vise
+    protection: str = Field(max_length=300)                 # resume : « Aucune », « 5 tentatives max »…
     result: Literal["found", "blocked", "resist", "interrupted"]
-    tries: float = Field(ge=0, allow_inf_nan=False)         # essais effectués
-    timeSec: float = Field(ge=0, allow_inf_nan=False)       # durée de l'attaque (secondes, vitesse de l'attaquant)
+    tries: float = Field(ge=0, allow_inf_nan=False)         # essais effectues
+    timeSec: float = Field(ge=0, allow_inf_nan=False)       # duree de l'attaque (secondes, vitesse de l'attaquant)
 
 
 class ChatParams(BaseModel):
     algo: Literal["caesar", "playfair", "hill"]
-    shift: Optional[Union[int, str]] = None   # un très grand décalage arrive en texte
+    shift: Optional[Union[int, str]] = None   # un tres grand decalage arrive en texte
     direction: Optional[Literal["right", "left"]] = None
     key: Optional[str] = Field(default=None, max_length=2000)
     matrix: Optional[List[List[Union[int, str]]]] = Field(default=None, max_length=5)
@@ -231,7 +231,7 @@ class ChatParams(BaseModel):
 class ChatMessageIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     id: int
-    sender: Literal["a", "b"] = Field(alias="from")   # « from » est un mot réservé de Python
+    sender: Literal["a", "b"] = Field(alias="from")   # « from » est un mot reserve de Python
     plain: str = Field(max_length=5000)
     cipher: str = Field(max_length=20000)
     params: ChatParams
@@ -283,7 +283,7 @@ def _bench_us(fn, *args):
     try:
         start = time.perf_counter_ns()
         n = 1
-        while True:                                   # calibrage de la fenêtre
+        while True:                                   # calibrage de la fenetre
             t0 = time.perf_counter_ns()
             for _ in range(n):
                 fn(*args)
@@ -316,10 +316,10 @@ def cipher(req: CipherRequest):
     try:
         encrypting = req.operation == "encrypt"
         # au chiffrement, on retire les non-lettres AVANT de chiffrer (le bloc
-        # chiffré est alors « en un seul morceau », comme Playfair et Hill)
+        # chiffre est alors « en un seul morceau », comme Playfair et Hill)
         if encrypting:
             letters, layout = en.split_layout(req.message)
-            cases = en.lower_positions(letters)   # où étaient les minuscules
+            cases = en.lower_positions(letters)   # ou etaient les minuscules
             text = en.to_upper(letters)           # on chiffre en majuscules
         else:
             layout, text = None, req.message
@@ -338,7 +338,7 @@ def cipher(req: CipherRequest):
             warning = en.playfair_weak_key(req.key)
             if encrypting:
                 fillers = en.playfair_fillers(en._playfair_clean(text))
-                jmap = en.playfair_jmap(text)   # où étaient les J (fusionnés en I)
+                jmap = en.playfair_jmap(text)   # ou etaient les J (fusionnes en I)
         elif req.algo == "hill":
             if req.matrix is None:
                 return _err("Remplis la matrice avant de lancer.")
@@ -365,14 +365,14 @@ def cipher(req: CipherRequest):
         except Exception:
             time_us = None
         if encrypting:
-            # le bloc chiffré + les métadonnées pour retrouver la forme au déchiffrement
+            # le bloc chiffre + les metadonnees pour retrouver la forme au dechiffrement
             return _ok(result=result, trace=_js_safe(trace), warning=warning,
                        layout=layout, fillers=fillers, jmap=jmap, cases=cases, time_us=time_us)
-        # déchiffrement : on remet la forme d'origine si on a les métadonnées
+        # dechiffrement : on remet la forme d'origine si on a les metadonnees
         if req.layout is not None:
             cleaned = en.strip_fillers(result, req.fillers or [])
-            cleaned = en.restore_j(cleaned, req.jmap or [])   # I→J aux positions mémorisées
-            cleaned = en.restore_case(cleaned, req.cases or [])   # minuscules aux positions mémorisées
+            cleaned = en.restore_j(cleaned, req.jmap or [])   # I→J aux positions memorisees
+            cleaned = en.restore_case(cleaned, req.cases or [])   # minuscules aux positions memorisees
             result = en.merge_layout(cleaned, req.layout)
         return _ok(result=result, trace=_js_safe(trace), warning=warning, time_us=time_us)
     except ValueError as e:
@@ -396,8 +396,8 @@ def cipher_warning(req: WarningRequest):
 
 
 # ------------------------------------------- key exchange with RSA (P2) ----
-# Les grands nombres sont renvoyés en texte : en JavaScript, un nombre au-delà
-# de 2^53 perd sa précision.
+# Les grands nombres sont renvoyes en texte : en JavaScript, un nombre au-dela
+# de 2^53 perd sa precision.
 @app.post("/api/rsa/keygen")
 def rsa_keygen(req: KeygenRequest):
     try:
@@ -434,8 +434,8 @@ def exchange_open(req: OpenRequest):
         params = rsa.text_to_params(opened["text"])
     except ValueError as ex:
         return _err(str(ex))
-    # les nombres de la clé repartent en texte : un grand décalage ou une grande
-    # case de matrice garde ainsi tous ses chiffres côté JavaScript
+    # les nombres de la cle repartent en texte : un grand decalage ou une grande
+    # case de matrice garde ainsi tous ses chiffres cote JavaScript
     if "shift" in params:
         params["shift"] = str(params["shift"])
     if "matrix" in params:
@@ -502,9 +502,9 @@ def password_dictionary(req: DictRequest):
     return _ok(**pw.dictionary_attack(req.target, req.limit))
 
 
-# --- attaques en tâche de fond : vraie boucle, vraie progression, vrai arrêt ----
-# (remplace, côté frontend, les deux routes ci-dessus pour l'affichage en direct ;
-# elles restent utilisables telles quelles pour un résultat instantané/scripté)
+# --- attaques en tache de fond : vraie boucle, vraie progression, vrai arret ----
+# (remplace, cote frontend, les deux routes ci-dessus pour l'affichage en direct ;
+# elles restent utilisables telles quelles pour un resultat instantane/scripte)
 @app.post("/api/passwords/attack/start")
 def attack_start(req: AttackStartRequest):
     try:
@@ -549,8 +549,8 @@ def integrity_demo(req: IntegrityDemoRequest):
     return _ok(**integrity.demo(req.key, req.original, req.received))
 
 
-# canal A -> B réel : le message est vraiment chiffré (algo + clé tirés au
-# hasard, voir integrity.seal), et c'est ce chiffré que C peut altérer avant
+# canal A -> B reel : le message est vraiment chiffre (algo + cle tires au
+# hasard, voir integrity.seal), et c'est ce chiffre que C peut alterer avant
 # que B ne l'ouvre (integrity.open_channel), protection HMAC activable ou non.
 @app.post("/api/integrity/seal")
 def integrity_seal(req: IntegritySealRequest):
@@ -569,7 +569,7 @@ def integrity_open(req: IntegrityOpenRequest):
 # Voir storage.py : deux fichiers JSON dans backend/data/.
 @app.get("/api/history")
 def history_list():
-    return _ok(entries=storage.history_list())            # la plus récente en premier
+    return _ok(entries=storage.history_list())            # la plus recente en premier
 
 
 @app.post("/api/history")
@@ -630,9 +630,9 @@ class LoginIn(BaseModel):
     username: str = Field(max_length=60)
     password: str = Field(max_length=200)
     captcha_id: str = Field(max_length=100)
-    answer: Any = None                  # texte tapé, ou numéro du cadenas choisi
-    nonce: Any = None                   # le nombre trouvé pour la preuve de travail
-    human: Optional[dict] = None        # {ms: temps passé sur la page, events: gestes}
+    answer: Any = None                  # texte tape, ou numero du cadenas choisi
+    nonce: Any = None                   # le nombre trouve pour la preuve de travail
+    human: Optional[dict] = None        # {ms: temps passe sur la page, events: gestes}
 
 
 _CAPTCHA_MSG = {
@@ -642,7 +642,7 @@ _CAPTCHA_MSG = {
     "pow": "Preuve de travail invalide. Un nouveau défi t'attend.",
     "fast": "Trop rapide : prends le temps de regarder le défi.",
 }
-_gen: dict = {}                         # ip → instants des derniers captchas demandés
+_gen: dict = {}                         # ip → instants des derniers captchas demandes
 
 
 def _ip(request: Request) -> str:
@@ -677,7 +677,7 @@ def auth_captcha(request: Request, exclude: Optional[str] = None):
     _gen[ip] = recent
     if len(_gen) > 3000:
         _gen.clear()
-    extra = len(auth.recent_failures("ip:" + ip))          # chaque échec récent alourdit la preuve de travail
+    extra = len(auth.recent_failures("ip:" + ip))          # chaque echec recent alourdit la preuve de travail
     return {"ok": True, "challenge": captcha.new_challenge(exclude=exclude if exclude in captcha.KINDS else None, extra_bits=extra)}
 
 
@@ -693,7 +693,7 @@ def auth_captcha_discard(req: DiscardIn):
 
 def _blocked_response(wait_captcha: Optional[str] = None):
     if wait_captcha:
-        captcha.verify(wait_captcha, None)                         # le défi est détruit quand même
+        captcha.verify(wait_captcha, None)                         # le defi est detruit quand meme
     return JSONResponse({"ok": False, "error": "blocked", "message": _BLOCKED_MSG}, status_code=423)
 
 
@@ -707,7 +707,7 @@ def _gate(req, request: Request):
     anti-robot (usage unique), comportement humain. Renvoie une réponse d'erreur, ou None
     si tout est bon."""
     ip = _ip(request)
-    # 1) le défi (usage unique)
+    # 1) le defi (usage unique)
     why = captcha.verify(req.captcha_id, req.answer, req.nonce)
     if why != "ok":
         auth.record_failure("ip:" + ip)
@@ -731,13 +731,13 @@ def auth_login(req: LoginIn, request: Request):
     if not auth.auth_enabled():
         return JSONResponse({"ok": True, "user": "dev"})
     ip = _ip(request)
-    if auth.is_blocked(req.username, ip):                   # bloqué pour CETTE IP : même avec le bon mot de passe
+    if auth.is_blocked(req.username, ip):                   # bloque pour CETTE IP : meme avec le bon mot de passe
         return _blocked_response(req.captcha_id)
     gate = _gate(req, request)
     if gate:
         return gate
-    # 3) les identifiants (au plus 4 mots de passe erronés de suite depuis cette IP,
-    #    puis ce couple compte/IP est bloqué — une autre IP peut toujours essayer)
+    # 3) les identifiants (au plus 4 mots de passe errones de suite depuis cette IP,
+    #    puis ce couple compte/IP est bloque — une autre IP peut toujours essayer)
     user, remaining = auth.attempt_login(req.username, req.password, ip)
     if not user:
         auth.record_failure("ip:" + ip)

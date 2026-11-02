@@ -18,7 +18,7 @@ const DIGITS = '0123456789'
 const SYMBOLS = '!@#$%^&*()-_=+[]{};:,.?/'
 
 const SCRAMBLE_MS = 55
-const POLL_MS = 150                 // fréquence de relecture de la progression RÉELLE côté serveur
+const POLL_MS = 150                 // frequence de relecture de la progression REELLE cote serveur
 
 const EMPTY_RULES: Rules = {
   require_lower: false, require_upper: false, require_digit: false, require_symbol: false, min_length: null,
@@ -27,12 +27,12 @@ const EMPTY_RULES: Rules = {
 // ---------------------------------------------------------------- helpers ----
 const strengthClass = (s: Strength) => `is-${s}`
 const WEAK: Strength[] = ['instant', 'faible', 'moyen']
-const FAST_RATE_FALLBACK = 1e10     // repli le temps que /api/passwords/cases réponde
+const FAST_RATE_FALLBACK = 1e10     // repli le temps que /api/passwords/cases reponde
 const YEAR_SECONDS = 31_536_000
 
-// Port fidèle de passwords.py human_time(seconds, compact=True) — mêmes seuils,
-// mêmes mots, pour que la case « ta cible réelle » parle le même langage que le
-// reste du site (et que ce qui s'affichera après une vraie attaque).
+// Port fidele de passwords.py human_time(seconds, compact=True) — memes seuils,
+// memes mots, pour que la case « ta cible reelle » parle le meme langage que le
+// reste du site (et que ce qui s'affichera apres une vraie attaque).
 function humanTimeCompact(seconds: number): [string, Strength] {
   const s = seconds
   if (!isFinite(s)) return ['10^100+ ans', 'inviolable']
@@ -56,9 +56,9 @@ function randStr(charset: string, len: number): string {
   for (let i = 0; i < len; i++) out += charset[Math.floor(Math.random() * charset.length)]
   return out
 }
-// nombre affiché (1 234 en français, 1,234 en anglais)
+// nombre affiche (1 234 en francais, 1,234 en anglais)
 const fr = (n: number) => num(Math.round(n))
-// nombre rangé dans l'historique : toujours en français (traduit à l'affichage par t())
+// nombre range dans l'historique : toujours en francais (traduit a l'affichage par t())
 const frFR = (n: number) => Math.round(n).toLocaleString('fr-FR')
 const dec = (p: number, d: number) => p.toLocaleString(locale(), { minimumFractionDigits: d, maximumFractionDigits: d })
 function fmtPct(p: number): string {
@@ -69,7 +69,7 @@ function fmtPct(p: number): string {
   return '< ' + dec(0.001, 3)
 }
 
-// n'autorise à la frappe que les caractères du cas, et borne la longueur
+// n'autorise a la frappe que les caracteres du cas, et borne la longueur
 function sanitize(v: string, caseId: CaseId, full: string): string {
   if (caseId === 'binaire') return v.replace(/[^01]/g, '').slice(0, 3)
   if (caseId === 'numerique') return v.replace(/[^1-4]/g, '').slice(0, 4)
@@ -77,7 +77,7 @@ function sanitize(v: string, caseId: CaseId, full: string): string {
   return [...v].filter((c) => allowed.has(c)).join('').slice(0, 64)
 }
 
-// jeu de caractères réellement présent (cas complexe) — pour le scramble
+// jeu de caracteres reellement present (cas complexe) — pour le scramble
 function detectedCharset(target: string): string {
   let s = ''
   if (/[a-z]/.test(target)) s += LOWER
@@ -87,7 +87,7 @@ function detectedCharset(target: string): string {
   return s
 }
 
-// libellé de composition pour la pastille (ce que l'attaque doit parcourir)
+// libelle de composition pour la pastille (ce que l'attaque doit parcourir)
 function composition(target: string, caseId: CaseId): string {
   if (caseId === 'binaire') return t('0 et 1')
   if (caseId === 'numerique') return t('chiffres 1 à 4')
@@ -109,7 +109,7 @@ function colForSize(size: number, sizes: number[]): number {
   return best
 }
 
-// génère un mot de passe conforme (cas + politique active)
+// genere un mot de passe conforme (cas + politique active)
 function generate(caseId: CaseId, len: number, full: string, rules: Rules | null): string {
   if (caseId === 'binaire') return randStr('01', 3)
   if (caseId === 'numerique') return randStr('1234', 4)
@@ -123,14 +123,14 @@ function generate(caseId: CaseId, len: number, full: string, rules: Rules | null
   L = Math.max(L, pools.length)
   const chars = pools.map((p) => p[Math.floor(Math.random() * p.length)])
   while (chars.length < L) chars.push(full[Math.floor(Math.random() * full.length)])
-  for (let i = chars.length - 1; i > 0; i--) {   // mélange de Fisher-Yates
+  for (let i = chars.length - 1; i > 0; i--) {   // melange de Fisher-Yates
     const j = Math.floor(Math.random() * (i + 1))
     ;[chars[i], chars[j]] = [chars[j], chars[i]]
   }
   return chars.join('')
 }
 
-// validité (côté client, retour instantané ; le backend re-vérifie à l'attaque)
+// validite (cote client, retour instantane ; le backend re-verifie a l'attaque)
 function checkValid(target: string, caseId: CaseId, rules: Rules | null): { valid: boolean; reasons: string[] } {
   const reasons: string[] = []
   if (caseId === 'binaire' || caseId === 'numerique') {
@@ -150,7 +150,7 @@ function checkValid(target: string, caseId: CaseId, rules: Rules | null): { vali
   return { valid: reasons.length === 0, reasons }
 }
 
-// icônes sobres
+// icones sobres
 const DiceIcon = () => (
   <svg className="icon-btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8.5" cy="8.5" r="1.1" fill="currentColor" stroke="none" />
@@ -167,7 +167,7 @@ const StopIcon = () => (
   <svg className="icon-btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
 )
 
-// `sec` = durée de l'attaque, à la vitesse de l'attaquant (essais / vitesse)
+// `sec` = duree de l'attaque, a la vitesse de l'attaquant (essais / vitesse)
 type Outcome =
   | { kind: 'brute-found'; pw: string; tries: number; sec: number; strength: Strength }
   | { kind: 'brute-blocked'; limit: number; sec: number }
@@ -193,16 +193,16 @@ export default function PasswordsPanel() {
   const [rules, setRules] = useState<Rules>(EMPTY_RULES)
   const [limitOn, setLimitOn] = useState(false)      // « limiter les tentatives » (cas complexe)
   const [limitStr, setLimitStr] = useState('5')      // champ libre (entier positif)
-  const [knowComposition, setKnowComposition] = useState(false)   // indice : l'attaquant connaît la composition
+  const [knowComposition, setKnowComposition] = useState(false)   // indice : l'attaquant connait la composition
 
   // attaque / verdict
   const [attacking, setAttacking] = useState<'brute' | 'dict' | null>(null)
   const [progress, setProgress] = useState(0)
   const [counter, setCounter] = useState(0)
   const [scramble, setScramble] = useState('')
-  const [elapsed, setElapsed] = useState(0)           // durée écoulée de l'attaque (secondes)
+  const [elapsed, setElapsed] = useState(0)           // duree ecoulee de l'attaque (secondes)
   const [history, setHistory] = useState<PwHistoryEntry[]>([])
-  const localId = useRef(0)                           // numéros négatifs : lignes que le backend n'a pas pu enregistrer
+  const localId = useRef(0)                           // numeros negatifs : lignes que le backend n'a pas pu enregistrer
   const [verdict, setVerdict] = useState<Outcome | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
@@ -212,7 +212,7 @@ export default function PasswordsPanel() {
   }>({ attackId: null, runId: 0, interrupted: false, meta: null })
 
   const full = data?.fullCharset ?? FALLBACK_FULL
-  const busy = !!attacking                            // pendant une attaque, rien ne se modifie : seul « Interrompre » l'arrête
+  const busy = !!attacking                            // pendant une attaque, rien ne se modifie : seul « Interrompre » l'arrete
   const isSmall = caseId !== 'complexe'
   const limitNum = Math.max(1, parseInt(limitStr, 10) || 1)
 
@@ -240,9 +240,9 @@ export default function PasswordsPanel() {
     setAttacking(null); setProgress(0); setCounter(0); setElapsed(0); setVerdict(null); setErr(null)
   }
 
-  // ---- historique (fichier côté backend ; si le backend ne répond pas, la ligne reste à l'écran) ----
+  // ---- historique (fichier cote backend ; si le backend ne repond pas, la ligne reste a l'ecran) ----
   function reloadHistory() {
-    api.pwHistoryList().then((r) => { if (r.ok) setHistory(r.entries) }).catch(() => { /* garde l'écran */ })
+    api.pwHistoryList().then((r) => { if (r.ok) setHistory(r.entries) }).catch(() => { /* garde l'ecran */ })
   }
   async function record(draft: PwHistoryDraft) {
     let entry: PwHistoryEntry
@@ -263,7 +263,7 @@ export default function PasswordsPanel() {
     api.pwHistoryClear().then((r) => { if (!r.ok) reloadHistory() }).catch(reloadHistory)
   }
 
-  // résumé des protections actives, pour l'historique (en français, traduit à l'affichage)
+  // resume des protections actives, pour l'historique (en francais, traduit a l'affichage)
   function protectionText(kind: 'brute' | 'dict'): string {
     const parts: string[] = []
     if (effLimit != null) parts.push(`${frFR(effLimit)} tentative${effLimit > 1 ? 's' : ''} max`)
@@ -303,15 +303,15 @@ export default function PasswordsPanel() {
     return randStr(cs, len)
   }
 
-  // L'attaque tourne pour de VRAI côté serveur (un vrai thread qui boucle à la
-  // vitesse réelle de cette machine) : cette fonction ne fait que relire sa
+  // L'attaque tourne pour de VRAI cote serveur (un vrai thread qui boucle a la
+  // vitesse reelle de cette machine) : cette fonction ne fait que relire sa
   // progression par polling et l'afficher telle quelle, sans rien simuler.
-  // Elle ne s'arrête que quand la cible est trouvée, que la limite de tentatives
+  // Elle ne s'arrete que quand la cible est trouvee, que la limite de tentatives
   // est atteinte (protection) ou que l'utilisateur clique sur « Interrompre »
-  // (qui coupe vraiment le thread côté serveur, pas seulement l'affichage).
+  // (qui coupe vraiment le thread cote serveur, pas seulement l'affichage).
   function applySnapshot(snap: AttackSnapshot, kind: 'brute' | 'dict', runId: number) {
     const a = anim.current
-    if (a.runId !== runId) return               // interrompu / réinitialisé pendant l'attente
+    if (a.runId !== runId) return               // interrompu / reinitialise pendant l'attente
     if (!snap.ok) { resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.')); return }
     setCounter(snap.pos)
     setProgress(snap.total > 0 ? (snap.pos / snap.total) * 100 : 0)
@@ -352,10 +352,10 @@ export default function PasswordsPanel() {
     const a = anim.current
     a.interrupted = true
     const stopId = a.attackId
-    a.runId++                                  // une réponse du backend encore attendue sera ignorée
+    a.runId++                                  // une reponse du backend encore attendue sera ignoree
     cancelAnims()
     if (stopId) void api.attackStop(stopId).catch(() => undefined)   // coupe VRAIMENT le thread
-    // on fige l'affichage sur les dernières valeurs réelles connues (déjà posées par le dernier poll)
+    // on fige l'affichage sur les dernieres valeurs reelles connues (deja posees par le dernier poll)
     setVerdict({ kind: 'interrupted', sec: elapsed, tries: counter, pct: progress, fullHuman: null })
     setAttacking(null)
     if (a.meta) record({ ...a.meta, result: 'interrupted', tries: counter, timeSec: elapsed })
@@ -376,10 +376,10 @@ export default function PasswordsPanel() {
         length: kind === 'brute' && !isSmall ? length : undefined,
         limit: effLimit, rules: effRules, knowComposition, lang: getLang(),
       })
-      if (a.runId !== id) return               // interrompu / réinitialisé pendant l'attente
+      if (a.runId !== id) return               // interrompu / reinitialise pendant l'attente
       if (!started.ok) { resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.')); return }
       a.attackId = started.id
-      applySnapshot(started, kind, id)         // déjà terminé pour les cas instantanés (binaire, numérique…)
+      applySnapshot(started, kind, id)         // deja termine pour les cas instantanes (binaire, numerique…)
       if (a.runId === id && !started.done) a.poll = window.setInterval(() => pollTick(id, kind), POLL_MS)
     } catch {
       if (a.runId !== id) return
@@ -389,23 +389,23 @@ export default function PasswordsPanel() {
 
   const classChips = [['require_lower', 'a-z'], ['require_upper', 'A-Z'], ['require_digit', '0-9'], ['require_symbol', _t('Symboles')]] as const
 
-  // mot de passe trouvé : on le garde affiché au-dessus de la barre
+  // mot de passe trouve : on le garde affiche au-dessus de la barre
   const foundPw = verdict && ((verdict.kind === 'brute-found' && WEAK.includes(verdict.strength)) || verdict.kind === 'dict-found')
     ? verdict.pw : null
-  // colonne à entourer dans le tableau : celle du jeu détecté si l'indice est
-  // actif, sinon la dernière (pire cas, jeu complet). Le tableau n'a que 5
-  // colonnes figées (jeux CUMULATIFS : 10, 26, 52, 62, 86) : dès que la cible
-  // mélange des classes autrement (ex. minuscules + chiffres + symboles, SANS
+  // colonne a entourer dans le tableau : celle du jeu detecte si l'indice est
+  // actif, sinon la derniere (pire cas, jeu complet). Le tableau n'a que 5
+  // colonnes figees (jeux CUMULATIFS : 10, 26, 52, 62, 86) : des que la cible
+  // melange des classes autrement (ex. minuscules + chiffres + symboles, SANS
   // majuscules = 60), aucune colonne ne correspond exactement — on entoure la
-  // plus proche en TAILLE, pas forcément la bonne composition. D'où le calcul
-  // exact juste en dessous (effSize/effHuman), affiché à part plutôt que de
-  // laisser croire que la case entourée est la valeur réelle.
+  // plus proche en TAILLE, pas forcement la bonne composition. D'ou le calcul
+  // exact juste en dessous (effSize/effHuman), affiche a part plutot que de
+  // laisser croire que la case entouree est la valeur reelle.
   const tableCols = data?.table?.columns ?? []
   const highlightCol = tableCols.length
     ? (knowComposition ? colForSize(detectedCharset(target).length || 86, tableCols.map((c) => c.size)) : tableCols.length - 1)
     : 0
-  // valeur EXACTE pour la cible actuelle (jeu réellement détecté + longueur réelle,
-  // pas arrondie à une case du tableau) — même rythme de référence que le tableau
+  // valeur EXACTE pour la cible actuelle (jeu reellement detecte + longueur reelle,
+  // pas arrondie a une case du tableau) — meme rythme de reference que le tableau
   const effSize = knowComposition ? (detectedCharset(target).length || 86) : 86
   const effLabel = knowComposition ? composition(target, caseId) : t('pire cas (jeu complet)')
   const effRate = data?.table?.rate ?? data?.assumptions.fastRate ?? FAST_RATE_FALLBACK
@@ -430,7 +430,7 @@ export default function PasswordsPanel() {
         </div>
       </div>
 
-      {/* --- cible : champ (compteur à droite), puis Générer, puis le slider --- */}
+      {/* --- cible : champ (compteur a droite), puis Generer, puis le slider --- */}
       <div className="pw-target">
         <div className="pw-input-wrap">
           <input className={'text-input mono pw-input' + (isSmall ? '' : ' has-count')}
@@ -449,7 +449,7 @@ export default function PasswordsPanel() {
         )}
       </div>
 
-      {/* --- indicateur de validité --- */}
+      {/* --- indicateur de validite --- */}
       <div className={'pw-validity ' + (validity.valid ? 'is-ok' : 'is-bad')} role="status">
         {validity.valid ? (<><CheckIcon /> {t('Mot de passe valide')}</>) : (<><CrossIcon /> {t('Invalide :')} {validity.reasons.join(' · ')}</>)}
       </div>
@@ -524,7 +524,7 @@ export default function PasswordsPanel() {
 
       {err && <div className="warn error">⚠ {t(err)}</div>}
 
-      {/* --- progression (reste visible à l'arrêt) --- */}
+      {/* --- progression (reste visible a l'arret) --- */}
       {(attacking || verdict) && (
         <div className="pw-stage">
           {attacking && (
@@ -552,7 +552,7 @@ export default function PasswordsPanel() {
       {verdict && <Verdict o={verdict} />}
 
 
-      {/* --- tableau des durées (complexe) --- */}
+      {/* --- tableau des durees (complexe) --- */}
       {!isSmall && data?.table && (
         <>
           <div className="divider" />
@@ -570,7 +570,7 @@ export default function PasswordsPanel() {
       )}
     </div>
 
-    {/* historique : une carte à part, hors du cadre « Mots de passe » */}
+    {/* historique : une carte a part, hors du cadre « Mots de passe » */}
     <PwHistory entries={history} onRemove={removeRun} onClear={clearHistory} />
     </>
   )

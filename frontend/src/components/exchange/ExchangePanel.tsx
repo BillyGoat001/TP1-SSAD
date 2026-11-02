@@ -12,19 +12,19 @@ import {
 import Chat, { type ChatMsg } from './Chat'
 import { t, _t, plural, getLang } from '../../i18n'
 
-// Partie 2 — Échange entre deux personnes.
-// Chaque utilisateur a une vraie paire de clés RSA (générée par le backend
-// Python). Pour envoyer, l'expéditeur chiffre son message avec César, Playfair
-// ou Hill, puis enferme l'algo, la clé et le chiffré dans la boîte publique du
-// destinataire (RSA). Seul le destinataire l'ouvre, avec sa clé privée : il
-// relit l'algo et la clé SORTIS DU COFFRE, et déchiffre avec eux.
-// Pour générer de nouvelles clés, il suffit de rafraîchir la page.
+// Partie 2 — Echange entre deux personnes.
+// Chaque utilisateur a une vraie paire de cles RSA (generee par le backend
+// Python). Pour envoyer, l'expediteur chiffre son message avec Cesar, Playfair
+// ou Hill, puis enferme l'algo, la cle et le chiffre dans la boite publique du
+// destinataire (RSA). Seul le destinataire l'ouvre, avec sa cle privee : il
+// relit l'algo et la cle SORTIS DU COFFRE, et dechiffre avec eux.
+// Pour generer de nouvelles cles, il suffit de rafraichir la page.
 
 const SIZES = [32, 64, 128, 512, 1024, 2048]
 const ALGOS: Algo[] = ['caesar', 'playfair', 'hill']
 const BACKEND_DOWN = _t('Backend injoignable. Lance le serveur Python.')
 const EMPTY_2X2 = [['', ''], ['', '']]
-// Toute l'animation (coffre, clé, boîte) est ralentie d'autant : 1 = vitesse d'origine.
+// Toute l'animation (coffre, cle, boite) est ralentie d'autant : 1 = vitesse d'origine.
 const SLOW = 1.25
 
 interface Pending {
@@ -34,27 +34,27 @@ interface Pending {
 }
 interface UserState {
   algo: Algo
-  shift: string               // César : uniquement des chiffres, vide au départ
+  shift: string               // Cesar : uniquement des chiffres, vide au depart
   direction: 'right' | 'left'
-  pfKey: string               // Playfair : vide au départ
-  hillCells: string[][]       // Hill : cases vides au départ
+  pfKey: string               // Playfair : vide au depart
+  hillCells: string[][]       // Hill : cases vides au depart
   matrixValid: boolean
   clear: string
-  enc: string                 // 2 · chiffré à envoyer
+  enc: string                 // 2 · chiffre a envoyer
   pending: Pending | null     // ce qui partira au clic sur Envoyer
   warning: string | null
   error: string | null
-  recv: string                // 4 · reçu (chiffré)
+  recv: string                // 4 · recu (chiffre)
   ralgo: string               // algo relu dans le coffre
-  rkey: string                // clé relue dans le coffre
-  dec: string                 // 3 · reçu (déchiffré)
-  box: BoxView | null         // démonstration affichée dans la boîte floutée
+  rkey: string                // cle relue dans le coffre
+  dec: string                 // 3 · recu (dechiffre)
+  box: BoxView | null         // demonstration affichee dans la boite floutee
   boxN: number
-  boxFrom: U                  // couleur de la boîte : l'auteur du message traité
+  boxFrom: U                  // couleur de la boite : l'auteur du message traite
   blurred: boolean
   feeding: boolean            // le brouillard remue
-  feed: { n: number; text: string; step: number } | null      // lettres qui tombent dans la boîte
-  emerge: { n: number; text: string; step: number; label: string; cipher: boolean } | null // résultat qui se condense
+  feed: { n: number; text: string; step: number } | null      // lettres qui tombent dans la boite
+  emerge: { n: number; text: string; step: number; label: string; cipher: boolean } | null // resultat qui se condense
 }
 
 const initUser = (u: U): UserState => ({
@@ -75,7 +75,7 @@ function cipherInput(p: ExchangeParams, operation: 'encrypt' | 'decrypt', messag
   layout?: [number, string][], fillers?: number[], jmap?: number[], cases?: number[]): CipherInput {
   return { algo: p.algo, operation, message, shift: p.shift, direction: p.direction, key: p.key, matrix: p.matrix, layout, fillers, jmap, cases }
 }
-const cleanMessage = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '')   // accents retirés, casse gardée
+const cleanMessage = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '')   // accents retires, casse gardee
 const si = (i: number) => ({ '--i': i }) as CSSProperties // rang dans l'apparition en cascade
 
 export default function ExchangePanel({ active }: { active: boolean }) {
@@ -93,9 +93,9 @@ export default function ExchangePanel({ active }: { active: boolean }) {
   const [lastSent, setLastSent] = useState<{ from: U; blocks: string[]; cipher: string } | null>(null)
   const [chat, setChat] = useState<ChatMsg[]>([])
   const [cipherView, setCipherView] = useState(false)
-  const [protoOpen, setProtoOpen] = useState(false) // « Protocole RSA » : replié par défaut
+  const [protoOpen, setProtoOpen] = useState(false) // « Protocole RSA » : replie par defaut
 
-  // Les animations sont asynchrones : elles lisent l'état le plus récent via ces refs.
+  // Les animations sont asynchrones : elles lisent l'etat le plus recent via ces refs.
   const usersRef = useRef(users)
   usersRef.current = users
   const keysRef = useRef(keys)
@@ -104,7 +104,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
   revealedRef.current = revealed
   const busyRef = useRef(false)
   const startedRef = useRef(false)
-  const token = useRef(0) // change à chaque interruption : les animations en cours s'arrêtent
+  const token = useRef(0) // change a chaque interruption : les animations en cours s'arretent
   const stageRef = useRef<HTMLDivElement>(null)
   const fxRef = useRef<Fx | null>(null)
   const refs = useRef<Record<string, HTMLElement | null>>({})
@@ -122,7 +122,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     setBusyState(v)
   }
 
-  // La conversation est rangée dans un fichier du backend : on la retrouve au chargement.
+  // La conversation est rangee dans un fichier du backend : on la retrouve au chargement.
   useEffect(() => {
     let alive = true
     api.conversationList()
@@ -137,8 +137,8 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     return () => { alive = false }
   }, [])
 
-  // Supprime toute la conversation : à l'écran tout de suite, puis dans le fichier
-  // (si le fichier n'a pas pu être vidé, on réaffiche ce qu'il contient encore).
+  // Supprime toute la conversation : a l'ecran tout de suite, puis dans le fichier
+  // (si le fichier n'a pas pu etre vide, on reaffiche ce qu'il contient encore).
   function clearChat() {
     setChat([])
     api.conversationClear()
@@ -149,7 +149,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     api.conversationList().then((r) => { if (r.ok) setChat(r.messages as ChatMsg[]) }).catch(() => {})
   }
 
-  // Tant que la messagerie est repliée, ses champs ne doivent pas recevoir le focus.
+  // Tant que la messagerie est repliee, ses champs ne doivent pas recevoir le focus.
   useEffect(() => {
     for (const k of ['a-reveal', 'b-reveal', 'a-boxrev', 'b-boxrev']) refs.current[k]?.toggleAttribute('inert', !revealed)
   }, [revealed])
@@ -164,10 +164,10 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     }
   }, [users.a.clear, users.b.clear, revealed])
 
-  // Quitter l'onglet Chiffrement (la partie est alors démontée) arrête les animations en cours.
+  // Quitter l'onglet Chiffrement (la partie est alors demontee) arrete les animations en cours.
   useEffect(() => () => { token.current++; fxRef.current?.clear() }, [])
 
-  // Quitter la partie « Échange » au milieu d'une animation l'interrompt proprement.
+  // Quitter la partie « Echange » au milieu d'une animation l'interrompt proprement.
   useEffect(() => {
     if (active || !busyRef.current) return
     if (!revealedRef.current) reset()
@@ -199,10 +199,10 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     setHid({})
     setGenError(null)
     setLastSent(null)
-    // (la conversation n'est pas effacée : elle est rangée dans son fichier, voir backend/storage.py)
+    // (la conversation n'est pas effacee : elle est rangee dans son fichier, voir backend/storage.py)
   }
 
-  // ------------------------------------------- 1. génération + échange ----
+  // ------------------------------------------- 1. generation + echange ----
   async function start() {
     if (busyRef.current || startedRef.current) return
     startedRef.current = true
@@ -227,7 +227,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     if (!ok()) return
     const F = fx()
 
-    // les clés apparaissent dans leurs champs, publiques d'abord
+    // les cles apparaissent dans leurs champs, publiques d'abord
     flushSync(() => {
       setKeys({ a: ka, b: kb })
       setKeysShown(true)
@@ -242,7 +242,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     await F.wait(700)
     if (!ok()) return
 
-    // les clés publiques s'échangent : elles partent ensemble vers la carte opposée
+    // les cles publiques s'echangent : elles partent ensemble vers la carte opposee
     const pa = F.ctr(el('a-pub')), pb = F.ctr(el('b-pub'))
     const ca = F.clone(el('a-pub')), cb = F.clone(el('b-pub'))
     flushSync(() => setHid({ 'a-pub': true, 'b-pub': true }))
@@ -256,17 +256,17 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     await F.wait(400)
     if (!ok()) return
 
-    // la messagerie apparaît
+    // la messagerie apparait
     setRevealed(true)
     window.setTimeout(() => ok() && setRevealDone(true), 1150)
     setBusy(false)
   }
 
-  // ---------------------------------------- la boîte, comme avant ----
-  // Même animation que la partie « Chiffrer un message » : les lettres tombent
-  // une à une dans le brouillard, une onde le traverse, le brouillard remue, puis
-  // le résultat se condense, dans la couleur de l'utilisateur (le vert reste dans la démonstration).
-  // Renvoie la bande d'où le résultat repartira vers son champ.
+  // ---------------------------------------- la boite, comme avant ----
+  // Meme animation que la partie « Chiffrer un message » : les lettres tombent
+  // une a une dans le brouillard, une onde le traverse, le brouillard remue, puis
+  // le resultat se condense, dans la couleur de l'utilisateur (le vert reste dans la demonstration).
+  // Renvoie la bande d'ou le resultat repartira vers son champ.
   async function feedBox(u: U, author: U, view: BoxView, input: string, output: string, ok: () => boolean) {
     const F = fx()
     const n = usersRef.current[u].boxN + 1
@@ -326,16 +326,16 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     const layout = resp.layout ?? [], fillers = resp.fillers ?? [], jmap = resp.jmap ?? [], cases = resp.cases ?? []
     upd(u, { warning: resp.warning ?? null })
     const F = fx()
-    // la vue se cadre sur le champ du message et le haut de la boîte, puis le message part
+    // la vue se cadre sur le champ du message et le haut de la boite, puis le message part
     await F.look([el(`${u}-clear`), { el: el(`${u}-box`), h: 230 }])
     if (!ok()) return
     const tgt = F.topOf(el(`${u}-box`), 58)
-    // le message quitte son champ et rejoint le haut de la boîte…
+    // le message quitte son champ et rejoint le haut de la boite…
     const f1 = F.pill(clip(text, 48), u, false, F.ctr(el(`${u}-clear`)))
     await F.go(f1, tgt, { ms: 850 })
     if (!ok()) return
     f1.remove()
-    // …où il se dissout dans le brouillard ; le chiffré s'y condense
+    // …ou il se dissout dans le brouillard ; le chiffre s'y condense
     const strip = await feedBox(u, u, { op: 'encrypt', trace, original: text, params }, text, result, ok)
     if (!ok()) return
     if (!strip) {
@@ -343,7 +343,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
       setBusy(false)
       return
     }
-    // la vue remonte : on voit le champ « Chiffré à envoyer » en même temps que la bande qui en part
+    // la vue remonte : on voit le champ « Chiffre a envoyer » en meme temps que la bande qui en part
     await F.look([el(`${u}-enc`), strip])
     if (!ok()) return
     const f2 = F.pill(clip(result, 48), u, true, F.ctr(strip))
@@ -366,7 +366,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     setBusy(true)
     upd(u, { error: null })
 
-    // l'expéditeur enferme {algo, clé} avec la clé PUBLIQUE du destinataire (vrai RSA, en Python)
+    // l'expediteur enferme {algo, cle} avec la cle PUBLIQUE du destinataire (vrai RSA, en Python)
     let seal: SealResponse
     try {
       seal = await api.exchangeSeal(p.params, { n: kv.n, e: kv.e })
@@ -381,11 +381,11 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     }
     const sealedBlocks = seal.blocks.map((b) => b.c)
     const F = fx(), mobile = window.matchMedia('(max-width: 640px)').matches
-    // la vue se cadre sur la carte de l'expéditeur : de la boîte publique jusqu'au bouton Envoyer
+    // la vue se cadre sur la carte de l'expediteur : de la boite publique jusqu'au bouton Envoyer
     await F.look([el(`${u}-pubicon`), el(`${u}-send`)])
     if (!ok()) return
 
-    // 1) la boîte publique du destinataire sort du champ « Clé publique » et s'ouvre par le haut
+    // 1) la boite publique du destinataire sort du champ « Cle publique » et s'ouvre par le haut
     const icon = el(`${u}-pubicon`), ic = F.ctr(icon)
     const ch = F.chest(v)
     const S = ch.offsetWidth
@@ -400,7 +400,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     await F.lid(ch, true, d1.x > F.ctr(el(`${u}-send`)).x)
     if (!ok()) return
 
-    // 2) l'algo utilisé, puis la clé, puis le message chiffré tombent dedans
+    // 2) l'algo utilise, puis la cle, puis le message chiffre tombent dedans
     const algoBtn = el(`${u}-algo`).querySelector('.is-on') ?? el(`${u}-algo`)
     const ins: [string, Element, boolean][] = [
       [algoName(p.params.algo), algoBtn, false],
@@ -420,11 +420,11 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     await F.lid(ch, false)
     if (!ok()) return
 
-    // 3) le coffre verrouillé traverse le canal (l'expéditeur garde la boîte publique : elle resservira)
+    // 3) le coffre verrouille traverse le canal (l'expediteur garde la boite publique : elle resservira)
     hideNow(`${u}-pubicon`, false)
     F.showIn(el(`${u}-pubicon`))
     setLastSent({ from: u, blocks: sealedBlocks, cipher: p.cipher })
-    // le destinataire ouvre avec SA clé privée : le calcul part pendant le trajet
+    // le destinataire ouvre avec SA cle privee : le calcul part pendant le trajet
     const opening: Promise<OpenResponse> = api
       .exchangeOpen({ n: kv.n, d: kv.d }, sealedBlocks)
       .catch(() => ({ ok: false, error: BACKEND_DOWN }))
@@ -446,14 +446,14 @@ export default function ExchangePanel({ active }: { active: boolean }) {
       return
     }
     const prm = opened.params
-    // la vue remonte vers la clé privée du destinataire, avec la serrure dans le champ
+    // la vue remonte vers la cle privee du destinataire, avec la serrure dans le champ
     await F.look([el(`${v}-privicon`), el(`${v}-send`)])
     if (!ok()) return
 
-    // 4) la clé privée du destinataire sort de son champ et entre dans la serrure
+    // 4) la cle privee du destinataire sort de son champ et entre dans la serrure
     const kicon = el(`${v}-privicon`), kc = F.ctr(kicon), h = F.hole(ch)
     const k = F.key(v)
-    const KS = k.offsetWidth, KT = (KS * 10) / 24 // taille de la clé ; centre → pointe
+    const KS = k.offsetWidth, KT = (KS * 10) / 24 // taille de la cle ; centre → pointe
     F.setAt(k, kc, -45, kc.w / KS)
     hideNow(`${v}-privicon`, true)
     await F.go(k, { x: kc.x, y: kc.y - 26 }, { s1: 1, ms: 320, ease: 'cubic-bezier(.2,.8,.3,1.15)' })
@@ -465,12 +465,12 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     await F.turnKey(k)
     if (!ok()) return
     F.glowHole(ch)
-    // pendant que le couvercle s'ouvre, la vue s'élargit jusqu'aux champs où le contenu va sortir
+    // pendant que le couvercle s'ouvre, la vue s'elargit jusqu'aux champs ou le contenu va sortir
     const cam = F.look([el(`${v}-privicon`), el(`${v}-send`), el(`${v}-rkey`)])
     await F.lid(ch, true, d2.x > F.ctr(el(`${v}-send`)).x)
     await cam
     if (!ok()) return
-    // la clé retourne dans son champ pendant que le contenu sort
+    // la cle retourne dans son champ pendant que le contenu sort
     const back = F.go(k, kc, { s1: kc.w / KS, r1: -45, arc: -24, ms: 700 }).then(() => {
       k.remove()
       if (ok()) {
@@ -479,10 +479,10 @@ export default function ExchangePanel({ active }: { active: boolean }) {
       }
     })
 
-    // 5) le chiffré rejoint son champ ; l'algo et la clé RELUS dans le coffre se rangent juste en dessous
+    // 5) le chiffre rejoint son champ ; l'algo et la cle RELUS dans le coffre se rangent juste en dessous
     const outs: [string, string, 'recv' | 'ralgo' | 'rkey', boolean][] = [
       [clip(p.cipher, 48), p.cipher, 'recv', true],
-      [algoName(prm.algo), NAME[prm.algo], 'ralgo', false],     // affiché traduit, rangé en français
+      [algoName(prm.algo), NAME[prm.algo], 'ralgo', false],     // affiche traduit, range en francais
       [t(keyShort(prm)), keyText(prm), 'rkey', false],
     ]
     await Promise.all([
@@ -503,7 +503,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     if (!ok()) return
     ch.remove()
 
-    // 6) le chiffré, l'algo et la clé rejoignent la boîte floutée ; le message déchiffré en ressort
+    // 6) le chiffre, l'algo et la cle rejoignent la boite floutee ; le message dechiffre en ressort
     const decrypting: Promise<CipherResponse> = api
       .cipher(cipherInput(prm, 'decrypt', p.cipher, p.layout, p.fillers, p.jmap, p.cases))
       .catch(() => ({ ok: false, error: BACKEND_DOWN }))
@@ -513,7 +513,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     await Promise.all((['recv', 'ralgo', 'rkey'] as const).map((field, i) => F.wait(i * 90).then(async () => {
       if (!ok()) return
       const src = el(`${v}-${field}`)
-      const main = field === 'recv' // le chiffré arrive entier, l'algo et la clé s'effacent dans la boîte
+      const main = field === 'recv' // le chiffre arrive entier, l'algo et la cle s'effacent dans la boite
       const f = F.pill(field === 'rkey' ? t(keyShort(prm)) : clip(src.textContent ?? '', 48), u, main, F.ctr(src))
       await F.go(f, tgt, main ? { ms: 760 } : { s1: 0.5, o1: 0, ms: 760 })
       f.remove()
@@ -527,7 +527,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
       return
     }
     const plain = dr.result
-    // déchiffrer : la boîte prend la couleur de l'autre utilisateur (l'auteur du message)
+    // dechiffrer : la boite prend la couleur de l'autre utilisateur (l'auteur du message)
     const strip = await feedBox(v, u, { op: 'decrypt', trace: dr.trace, original: p.cipher, params: prm }, p.cipher, plain, ok)
     if (!ok()) return
     if (!strip) {
@@ -547,7 +547,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
     // le message rejoint la conversation
     const msg: ChatMsg = { id: Date.now(), from: u, plain: p.plain, cipher: p.cipher, params: p.params }
     setChat((c) => [...c, msg])
-    api.conversationAdd(msg).catch(() => {}) // rangé dans le fichier de la conversation
+    api.conversationAdd(msg).catch(() => {}) // range dans le fichier de la conversation
     setBusy(false)
   }
 
@@ -555,7 +555,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
   function renderCard(u: U) {
     const st = users[u], v = OTHER[u]
     const pubOwner: U = exchanged ? v : u
-    const inval = { pending: null, enc: '' } // toute modification annule le chiffré prêt à partir
+    const inval = { pending: null, enc: '' } // toute modification annule le chiffre pret a partir
     const setAlgo = (a: Algo) => upd(u, { algo: a, ...inval, error: null, warning: null })
     return (
       <section className={`ex-card ex-from-${u}`} ref={reg(`${u}-card`)}>
@@ -594,7 +594,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
                     <>
                       <label className="field">
                         <span className="field-label">{t('Décalage')}</span>
-                        {/* uniquement des chiffres ; le champ s'élargit avec le nombre, sans dépasser la carte */}
+                        {/* uniquement des chiffres ; le champ s'elargit avec le nombre, sans depasser la carte */}
                         <input
                           className="text-input ex-tint ex-shift" type="text" inputMode="numeric" autoComplete="off"
                           placeholder={t('ex. 3')} value={st.shift}
@@ -647,7 +647,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
                 <span className="ex-mlabel">{t('2 · Chiffré à envoyer')}</span>
                 <span className="ex-val is-cipher" ref={reg(`${u}-enc`)}>{st.enc || '—'}</span>
               </div>
-              {/* la flèche pointe vers le destinataire : B est à droite de A */}
+              {/* la fleche pointe vers le destinataire : B est a droite de A */}
               <button
                 type="button" className="btn btn-accent ex-act ex-send" ref={reg(`${u}-send`)} style={si(5)}
                 onClick={() => doSend(u)} disabled={busy || !st.pending}
@@ -693,7 +693,7 @@ export default function ExchangePanel({ active }: { active: boolean }) {
           >
             <div className="ex-box-title">
               <span className={`ex-dot ex-from-${u}`} />
-              {/* le titre suit l'opération en cours */}
+              {/* le titre suit l'operation en cours */}
               <span key={st.box?.op ?? 'idle'} className="ex-box-name">
                 {t(st.box?.op === 'encrypt' ? 'Boîte de chiffrement de {u}' : st.box?.op === 'decrypt' ? 'Boîte de déchiffrement de {u}' : 'Boîte de chiffrement / déchiffrement de {u}', { u: UP(u) })}
               </span>

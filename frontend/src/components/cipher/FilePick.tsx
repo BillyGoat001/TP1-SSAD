@@ -4,7 +4,7 @@ import { t, getLang } from '../../i18n'
 
 const quoted = (name: string) => (getLang() === 'en' ? `"${name}"` : `« ${name} »`)
 
-// Résultat affiché sous un champ après le choix d'un fichier.
+// Resultat affiche sous un champ apres le choix d'un fichier.
 export type FileNote =
   | { ok: true; name: string; info: string }
   | { ok: false; name: string; problem: Problem }
@@ -15,13 +15,13 @@ const FileIcon = () => (
   </svg>
 )
 
-// Bouton « choisir UN fichier » : le sélecteur natif n'a pas l'attribut multiple.
-// Aucune restriction d'extension : le contenu est vérifié, pas le nom.
+// Bouton « choisir UN fichier » : le selecteur natif n'a pas l'attribut multiple.
+// Aucune restriction d'extension : le contenu est verifie, pas le nom.
 export function FilePicker({ label, onFile }: { label: string; onFile: (f: File) => void }) {
   const ref = useRef<HTMLInputElement>(null)
   return (
     <>
-      {/* bouton discret : juste l'icône ; le titre s'affiche au survol (data-tip) ou au focus clavier */}
+      {/* bouton discret : juste l'icone ; le titre s'affiche au survol (data-tip) ou au focus clavier */}
       <button type="button" className="btn tiny cp-file-btn" aria-label={t(label)} data-tip={t(label)} onClick={() => ref.current?.click()}>
         <FileIcon />
       </button>
@@ -29,7 +29,7 @@ export function FilePicker({ label, onFile }: { label: string; onFile: (f: File)
         ref={ref} type="file" className="cp-file-input" tabIndex={-1} aria-label={t(label)}
         onChange={(e) => {
           const f = e.target.files?.[0]
-          e.target.value = '' // permet de re-choisir le même fichier après l'avoir corrigé
+          e.target.value = '' // permet de re-choisir le meme fichier apres l'avoir corrige
           if (f) onFile(f)
         }}
       />
@@ -37,7 +37,7 @@ export function FilePicker({ label, onFile }: { label: string; onFile: (f: File)
   )
 }
 
-// Succès (disparaît seul) ou avertissement rouge (reste jusqu'à ce qu'on le ferme ou qu'on continue).
+// Succes (disparait seul) ou avertissement rouge (reste jusqu'a ce qu'on le ferme ou qu'on continue).
 export function FileNotice({ note, what, onClose }: { note: FileNote | null; what: string; onClose: () => void }) {
   useEffect(() => {
     if (!note || !note.ok) return

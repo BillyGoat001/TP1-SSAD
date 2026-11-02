@@ -7,21 +7,21 @@ import { t } from '../../i18n'
 export interface ChatMsg {
   id: number
   from: U
-  plain: string   // le message tel que l'expéditeur l'a écrit
-  cipher: string  // ce qui a circulé sur le canal
+  plain: string   // le message tel que l'expediteur l'a ecrit
+  cipher: string  // ce qui a circule sur le canal
   params: ExchangeParams
 }
 
-// La conversation entre A et B, façon messagerie. A écrit à gauche, B à droite
-// (comme dans les cartes). Chaque message a sa bulle d'explication sur le côté,
-// reliée par un trait : l'algorithme et la clé utilisés pour CE message.
-// Un bouton bascule entre la conversation en clair et ce qui a réellement
-// circulé (le chiffré).
+// La conversation entre A et B, facon messagerie. A ecrit a gauche, B a droite
+// (comme dans les cartes). Chaque message a sa bulle d'explication sur le cote,
+// reliee par un trait : l'algorithme et la cle utilises pour CE message.
+// Un bouton bascule entre la conversation en clair et ce qui a reellement
+// circule (le chiffre).
 export default function Chat({ msgs, cipherView, onToggle, onClear }: {
   msgs: ChatMsg[]
   cipherView: boolean
   onToggle: () => void
-  onClear: () => void   // supprime toute la conversation (écran + fichier)
+  onClear: () => void   // supprime toute la conversation (ecran + fichier)
 }) {
   const n = msgs.length
   return (
@@ -44,7 +44,7 @@ export default function Chat({ msgs, cipherView, onToggle, onClear }: {
               <span className="ex-chat-del-text">{t('Supprimer le chat')}</span>
             </button>
           )}
-          {/* les deux libellés sont empilés : le bouton garde la même largeur dans les deux vues */}
+          {/* les deux libelles sont empiles : le bouton garde la meme largeur dans les deux vues */}
           <button type="button" className={'ex-chat-toggle' + (cipherView ? ' is-on' : '')} onClick={onToggle} aria-pressed={cipherView}>
             <span className={'ex-tog' + (cipherView ? ' is-off' : '')} aria-hidden={cipherView}><LockIcon /> {t('Voir chiffré')}</span>
             <span className={'ex-tog' + (cipherView ? '' : ' is-off')} aria-hidden={!cipherView}><UnlockIcon /> {t('Voir en clair')}</span>
@@ -59,7 +59,7 @@ export default function Chat({ msgs, cipherView, onToggle, onClear }: {
           const how = t('{algo} · clé {key}', { algo: algoName(m.params.algo), key: abbr })
           return (
             <Fragment key={m.id}>
-              {/* hors de la fenêtre : visible seulement dans la vue chiffrée, bulle après bulle */}
+              {/* hors de la fenetre : visible seulement dans la vue chiffree, bulle apres bulle */}
               <div
                 className={`ex-side ex-side-${side} ex-from-${m.from}`} aria-hidden={!cipherView}
                 style={{ gridRow: i + 2, '--d': `${Math.min(i, 8) * 70}ms` } as CSSProperties}
@@ -76,8 +76,8 @@ export default function Chat({ msgs, cipherView, onToggle, onClear }: {
               >
                 <span className={'ex-avatar sm' + (lastOfGroup ? '' : ' is-ghost')}><UserIcon /></span>
                 <div className="ex-bubble-wrap">
-                  {/* clair et chiffré sont empilés dans la même case : la bulle (et donc la fenêtre) garde
-                      exactement la même taille dans les deux vues, seul l'un des deux textes se voit */}
+                  {/* clair et chiffre sont empiles dans la meme case : la bulle (et donc la fenetre) garde
+                      exactement la meme taille dans les deux vues, seul l'un des deux textes se voit */}
                   <div className={'ex-bubble' + (cipherView ? ' is-cipher' : '')} title={cipherView ? how : undefined}>
                     <span className={'ex-bubble-layer' + (cipherView ? ' is-off' : '')} aria-hidden={cipherView}>{m.plain}</span>
                     <span className={'ex-bubble-layer is-secret' + (cipherView ? '' : ' is-off')} aria-hidden={!cipherView}>
@@ -91,7 +91,7 @@ export default function Chat({ msgs, cipherView, onToggle, onClear }: {
           )
         })}
 
-        {/* un peu d'air sous la dernière bulle */}
+        {/* un peu d'air sous la derniere bulle */}
         {n > 0 && <div className="ex-chat-foot" style={{ gridRow: n + 2 }} aria-hidden="true" />}
       </div>
     </section>

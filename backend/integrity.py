@@ -5,19 +5,19 @@ import secrets
 import auth
 
 
-# Calcule l'étiquette HMAC-SHA256 (en hexa) d'un message sous une clé partagée.
+# Calcule l'etiquette HMAC-SHA256 (en hexa) d'un message sous une cle partagee.
 def sign(key, message):
     return hmac.new(key.encode(), message.encode(), hashlib.sha256).hexdigest()
 
 
-# Recalcule l'étiquette et la compare en temps constant avec celle reçue.
+# Recalcule l'etiquette et la compare en temps constant avec celle recue.
 def verify(key, message, tag):
     expected = sign(key, message)
     return hmac.compare_digest(expected, tag)
 
 
-# Démonstration A -> (canal) -> B où le message « reçu » est saisi à la main :
-# `original` est ce que A a envoyé, `received` ce que B a obtenu.
+# Demonstration A -> (canal) -> B ou le message « recu » est saisi a la main :
+# `original` est ce que A a envoye, `received` ce que B a obtenu.
 def demo(key, original, received):
     tag = sign(key, original)
     recomputed = sign(key, received)
@@ -29,11 +29,11 @@ def demo(key, original, received):
     }
 
 
-# Côté A : étiquette HMAC sur le CLAIR, puis chiffrement (signer-puis-chiffrer)
-# avec un algo et une clé tirés au hasard. Le champ `record["secret"]` est ce qui
+# Cote A : etiquette HMAC sur le CLAIR, puis chiffrement (signer-puis-chiffrer)
+# avec un algo et une cle tires au hasard. Le champ `record["secret"]` est ce qui
 # voyage, donc ce qu'un attaquant peut modifier. `encrypt=False` envoie le
-# message en clair, pour montrer que l'étiquette protège l'intégrité
-# indépendamment de la confidentialité.
+# message en clair, pour montrer que l'etiquette protege l'integrite
+# independamment de la confidentialite.
 def seal(hmac_key, message, encrypt=True):
     tag = sign(hmac_key, message)
     if not encrypt:
@@ -45,11 +45,11 @@ def seal(hmac_key, message, encrypt=True):
     return {"tag": tag, "record": record}
 
 
-# Côté B : déchiffre ce qui est arrivé (potentiellement altéré) et, si `protect`
-# est actif, recalcule l'étiquette sur le clair obtenu pour la comparer.
-# `protect=False` affiche le déchiffré sans aucune vérification : c'est la faille
-# démontrée. `broken=True` signale un chiffré altéré au point d'être
-# indéchiffrable (ex. Hill : longueur plus multiple du bloc).
+# Cote B : dechiffre ce qui est arrive (potentiellement altere) et, si `protect`
+# est actif, recalcule l'etiquette sur le clair obtenu pour la comparer.
+# `protect=False` affiche le dechiffre sans aucune verification : c'est la faille
+# demontree. `broken=True` signale un chiffre altere au point d'etre
+# indechiffrable (ex. Hill : longueur plus multiple du bloc).
 def open_channel(hmac_key, record, protect, tag):
     try:
         if record.get("method") is None:

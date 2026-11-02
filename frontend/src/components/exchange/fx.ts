@@ -1,34 +1,34 @@
-// Moteur d'animation de l'échange A ↔ B (Web Animations API, aucune dépendance).
-// Les « flotteurs » sont des éléments posés dans une scène absolue au-dessus des
-// cartes : ils volent d'un champ à l'autre, puis disparaissent. React ne touche
-// jamais à cette scène, il ne gère que les champs.
+// Moteur d'animation de l'echange A ↔ B (Web Animations API, aucune dependance).
+// Les « flotteurs » sont des elements poses dans une scene absolue au-dessus des
+// cartes : ils volent d'un champ a l'autre, puis disparaissent. React ne touche
+// jamais a cette scene, il ne gere que les champs.
 
 export type Pt = { x: number; y: number }
 export type Box = Pt & { w: number; h: number }
 export type Floater = HTMLDivElement & { _r: number; _s: number; _o: number }
-/** Ce que la caméra garde à l'écran : un élément, ou seulement ses `h` premiers px (éléments très hauts). */
+/** Ce que la camera garde a l'ecran : un element, ou seulement ses `h` premiers px (elements tres hauts). */
 export type Focus = Element | null | undefined | { el: Element | null | undefined; h: number }
 
 export interface GoOptions {
-  s1?: number      // échelle d'arrivée
-  r1?: number      // rotation d'arrivée (degrés)
-  o1?: number      // opacité d'arrivée
-  arc?: number     // bosse verticale de la trajectoire (px, négatif = vers le haut)
+  s1?: number      // echelle d'arrivee
+  r1?: number      // rotation d'arrivee (degres)
+  o1?: number      // opacite d'arrivee
+  arc?: number     // bosse verticale de la trajectoire (px, negatif = vers le haut)
   arcX?: number    // bosse horizontale
   ms?: number
   ease?: string
 }
 
-const LID = 78 // angle du couvercle ouvert (il bascule côté canal)
+const LID = 78 // angle du couvercle ouvert (il bascule cote canal)
 
-// Le coffre = la boîte publique RSA du destinataire (corps, sangles, serrure, couvercle bombé).
+// Le coffre = la boite publique RSA du destinataire (corps, sangles, serrure, couvercle bombe).
 export const CHEST_SVG =
   '<svg viewBox="0 0 24 24"><rect class="ch-mouth" x="4.2" y="9.4" width="15.6" height="2.6" rx="1.2"/>' +
   '<path class="ch-fill" d="M3 11.5h18V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path class="ch-band" d="M7 11.5v9.5M17 11.5v9.5"/>' +
   '<circle class="ch-hole" cx="12" cy="15.2" r="1.6"/><path class="ch-stem" d="M12 16v2.3"/><circle class="ch-glow" cx="12" cy="16" r="3"/>' +
   '<g class="ch-lid"><path class="ch-fill" d="M3 11.5V10.2C3 7.3 7 5.2 12 5.2s9 2.1 9 5v1.3z"/></g></svg>'
 
-// La clé privée, verticale (anneau en haut, panneton en bas) : elle entre dans la serrure.
+// La cle privee, verticale (anneau en haut, panneton en bas) : elle entre dans la serrure.
 export const KEY_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
   '<circle cx="12" cy="5.8" r="3.6"/><path d="M12 9.4V22"/><path d="M12 17.2h3.2M12 20.6h2.6"/></svg>'
@@ -55,14 +55,14 @@ export class Fx {
     this.stage.replaceChildren()
   }
 
-  // ---------------------------------------------------------- géométrie ----
-  /** Centre (et taille) d'un élément, dans le repère de la scène. */
+  // ---------------------------------------------------------- geometrie ----
+  /** Centre (et taille) d'un element, dans le repere de la scene. */
   ctr(el: Element): Box {
     const r = el.getBoundingClientRect()
     const s = this.stage.getBoundingClientRect()
     return { x: r.left - s.left + r.width / 2, y: r.top - s.top + r.height / 2, w: r.width, h: r.height }
   }
-  /** Un point près du haut d'un élément haut (la boîte floutée peut être grande). */
+  /** Un point pres du haut d'un element haut (la boite floutee peut etre grande). */
   topOf(el: Element, dy: number): Pt {
     const b = this.ctr(el)
     return { x: b.x, y: b.y - b.h / 2 + Math.min(dy, b.h / 2) }
@@ -98,7 +98,7 @@ export class Fx {
     f.style.opacity = String(o)
     return f
   }
-  /** Une étiquette de texte (message, algo, clé) aux couleurs de son auteur. */
+  /** Une etiquette de texte (message, algo, cle) aux couleurs de son auteur. */
   pill(text: string, author: string, cipher: boolean, at: Pt): Floater {
     const f = this.make('ex-item')
     const p = document.createElement('div')
@@ -110,7 +110,7 @@ export class Fx {
     f.appendChild(p)
     return this.setAt(f, at)
   }
-  /** Copie conforme d'un champ (même taille), pour le faire voyager. */
+  /** Copie conforme d'un champ (meme taille), pour le faire voyager. */
   clone(el: HTMLElement): Floater {
     const b = this.ctr(el)
     const f = this.make('ex-lift')
@@ -122,7 +122,7 @@ export class Fx {
   }
 
   // -------------------------------------------------------- mouvements ----
-  /** Vol centre à centre le long d'une courbe, avec échelle, rotation et opacité. */
+  /** Vol centre a centre le long d'une courbe, avec echelle, rotation et opacite. */
   go(f: Floater, to: Pt, o: GoOptions = {}): Promise<void> {
     const c = this.center(f)
     const dx = to.x - c.x
@@ -155,7 +155,7 @@ export class Fx {
       .finished.then(commit, commit)
   }
 
-  /** Un vrai champ apparaît en « pop ». */
+  /** Un vrai champ apparait en « pop ». */
   pop(el: Element | null, ms = 440): Promise<void> {
     if (!el || this.reduce) return Promise.resolve()
     return el
@@ -179,11 +179,11 @@ export class Fx {
       easing: 'ease-out',
     })
   }
-  // ------------------------------------------------------------- caméra ----
+  // ------------------------------------------------------------- camera ----
   /**
-   * Cadre la vue sur l'endroit où ça se passe. Si tout tient à l'écran, l'ensemble est centré (et
-   * on ne bouge pas si c'est déjà bien en vue) ; sinon c'est le DERNIER élément — la destination —
-   * qui prime. Se résout quand le défilement est terminé.
+   * Cadre la vue sur l'endroit ou ca se passe. Si tout tient a l'ecran, l'ensemble est centre (et
+   * on ne bouge pas si c'est deja bien en vue) ; sinon c'est le DERNIER element — la destination —
+   * qui prime. Se resout quand le defilement est termine.
    */
   look(items: Focus[], pad = 22): Promise<void> {
     const rs: { top: number; bottom: number }[] = []
@@ -191,7 +191,7 @@ export class Fx {
       const spec = it && 'el' in it ? it : { el: it as Element | null | undefined, h: Infinity }
       if (!spec.el) continue
       const r = spec.el.getBoundingClientRect()
-      if (r.width === 0 && r.height === 0) continue // pas affiché (onglet quitté, par exemple)
+      if (r.width === 0 && r.height === 0) continue // pas affiche (onglet quitte, par exemple)
       rs.push({ top: r.top, bottom: Math.min(r.bottom, r.top + spec.h) })
     }
     if (!rs.length) return Promise.resolve()
@@ -239,7 +239,7 @@ export class Fx {
   key(owner: string): Floater {
     return this.make(`ex-keyf ex-from-${owner}`, KEY_SVG)
   }
-  /** Ouvre / ferme le couvercle, charnière du côté `right` (à l'opposé du trafic). */
+  /** Ouvre / ferme le couvercle, charniere du cote `right` (a l'oppose du trafic). */
   lid(ch: Floater, open: boolean, right = false): Promise<void> {
     const g = ch.querySelector('.ch-lid') as SVGGElement
     if (open) {
@@ -278,7 +278,7 @@ export class Fx {
       { duration: this.dur(560), easing: 'ease-out' },
     )
   }
-  /** La clé tourne dans la serrure (vue de face : elle s'aplatit puis revient). */
+  /** La cle tourne dans la serrure (vue de face : elle s'aplatit puis revient). */
   turnKey(k: Floater): Promise<void> {
     const svg = k.firstElementChild
     if (this.reduce || !svg) return Promise.resolve()
@@ -295,19 +295,19 @@ export class Fx {
   hole(ch: Floater): Pt {
     return { x: this.center(ch).x, y: parseFloat(ch.style.top) + (ch.offsetHeight * 15.6) / 24 }
   }
-  /** Point d'attente du coffre : à côté du bouton Envoyer, du côté `right` ou gauche. */
+  /** Point d'attente du coffre : a cote du bouton Envoyer, du cote `right` ou gauche. */
   dock(send: Element, card: Element, size: number, right: boolean): Pt {
     const c = this.ctr(card), b = this.ctr(send), R = size / 2 + 8
     const bl = b.x - b.w / 2, br = b.x + b.w / 2, cl = c.x - c.w / 2, cr = c.x + c.w / 2
     return { x: right ? Math.max(br + R, (br + cr) / 2) : Math.min(bl - R, (cl + bl) / 2), y: b.y }
   }
-  /** Un élément saute puis tombe dans la bouche du coffre (il passe derrière la face avant). */
+  /** Un element saute puis tombe dans la bouche du coffre (il passe derriere la face avant). */
   async dropIn(f: Floater, ch: Floater) {
     const m = this.mouth(ch), w = f.offsetWidth
     await this.go(f, { x: m.x, y: m.y - 30 }, { s1: Math.min(0.66, 56 / w), arc: -46, ms: 640 })
     await this.go(f, { x: m.x, y: m.y + 15 }, { s1: Math.min(0.38, 36 / w), o1: 0, ms: 260, ease: 'cubic-bezier(.55,0,.9,.55)' })
   }
-  /** Un élément ressort par la bouche du coffre, contourne le coffre côté opposé au couvercle, et file vers `target`. */
+  /** Un element ressort par la bouche du coffre, contourne le coffre cote oppose au couvercle, et file vers `target`. */
   async popOut(text: string, ch: Floater, author: string, cipher: boolean, target: Element): Promise<Floater> {
     const m = this.mouth(ch)
     const f = this.pill(text, author, cipher, { x: m.x, y: m.y + 15 })

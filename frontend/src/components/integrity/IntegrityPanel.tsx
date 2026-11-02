@@ -4,27 +4,27 @@ import { api } from '../../api'
 import { algoName, keyText } from '../exchange/parts'
 import { t, _t } from '../../i18n'
 
-// Partie 4 — Intégrité du message (HMAC-SHA256).
-// A chiffre vraiment son message (César/Playfair/Hill tirés au hasard, comme
+// Partie 4 — Integrite du message (HMAC-SHA256).
+// A chiffre vraiment son message (Cesar/Playfair/Hill tires au hasard, comme
 // pour un mot de passe — voir backend/auth.py) et signe le CLAIR avant
-// chiffrement. C'est le CHIFFRÉ qui « voyage » sur le canal, et un attaquant C
-// peut l'intercepter et le modifier en route. Avec la protection activée, B
-// recalcule l'étiquette sur ce qu'il a déchiffré et la compare : toute
-// altération du chiffré fait diverger les étiquettes. Sans protection, B
-// affiche simplement ce qu'il a déchiffré comme « bien reçu », sans aucune
-// vérification — c'est la faille que la page démontre.
+// chiffrement. C'est le CHIFFRE qui « voyage » sur le canal, et un attaquant C
+// peut l'intercepter et le modifier en route. Avec la protection activee, B
+// recalcule l'etiquette sur ce qu'il a dechiffre et la compare : toute
+// alteration du chiffre fait diverger les etiquettes. Sans protection, B
+// affiche simplement ce qu'il a dechiffre comme « bien recu », sans aucune
+// verification — c'est la faille que la page demontre.
 
 type Pt = { x: number; y: number }
 type Dot = { x: number; y: number; color: 'green' | 'red' }
 type Phase = 'idle' | 'leg1' | 'toC' | 'atC' | 'legCB' | 'done'
 
-// Repères de la scène (unités du viewBox ; le SVG se met à l'échelle tout seul).
+// Reperes de la scene (unites du viewBox ; le SVG se met a l'echelle tout seul).
 const VB = { w: 320, h: 228 }
 const A: Pt = { x: 46, y: 72 }
 const B: Pt = { x: 274, y: 72 }
 const C: Pt = { x: 160, y: 176 }
 const TICK = 70 // ms entre deux points qui s'allument
-const STEP = 11 // espacement des points (unités viewBox)
+const STEP = 11 // espacement des points (unites viewBox)
 
 function dotsAlong(p: Pt, q: Pt, color: 'green' | 'red', step = STEP): Dot[] {
   const dx = q.x - p.x
@@ -36,8 +36,8 @@ function dotsAlong(p: Pt, q: Pt, color: 'green' | 'red', step = STEP): Dot[] {
   return out
 }
 
-// (algo, clé) d'un CipherRecord CHIFFRÉ (method non nul), dans la forme
-// attendue par keyText/algoName (les mêmes helpers que la page Échange).
+// (algo, cle) d'un CipherRecord CHIFFRE (method non nul), dans la forme
+// attendue par keyText/algoName (les memes helpers que la page Echange).
 function asParams(r: CipherRecord): ExchangeParams | null {
   if (r.method === 'caesar') return { algo: 'caesar', shift: r.key.shift, direction: 'right' }
   if (r.method === 'playfair') return { algo: 'playfair', key: r.key.key }
@@ -45,25 +45,25 @@ function asParams(r: CipherRecord): ExchangeParams | null {
   return null
 }
 
-// Exemples affichés en gris dans les champs vides (comme « ex. 3 » dans les autres pages)
+// Exemples affiches en gris dans les champs vides (comme « ex. 3 » dans les autres pages)
 const EX_KEY = _t('ex. cle-partagee')
 const EX_MSG = _t('ex. Virement de 100 DA vers le compte B')
 
 export default function IntegrityPanel() {
   const [key, setKey] = useState('')
   const [original, setOriginal] = useState('')
-  const [tampered, setTampered] = useState('')          // le CHIFFRÉ, tel que C le réécrit
+  const [tampered, setTampered] = useState('')          // le CHIFFRE, tel que C le reecrit
   const [error, setError] = useState<string | null>(null)   // champ vide : message rouge, comme dans les autres pages
   const [protect, setProtect] = useState(false)
   const [encrypt, setEncrypt] = useState(false)            // false = le message voyage en clair
-  const [revealed, setRevealed] = useState(false)        // algo + clé tirés au hasard, révélés ou non
+  const [revealed, setRevealed] = useState(false)        // algo + cle tires au hasard, reveles ou non
 
   const [phase, setPhase] = useState<Phase>('idle')
-  const [lit, setLit] = useState<Dot[]>([])      // points déjà allumés (persistants)
-  const [base, setBase] = useState<Dot[]>([])    // points à venir (faibles)
-  const [tagA, setTagA] = useState('…')          // étiquette calculée par A (clair), aperçu en direct
-  const [record, setRecord] = useState<CipherRecord | null>(null)   // chiffrement réel de ce message (une fois envoyé)
-  const [sealTag, setSealTag] = useState<string | null>(null)       // étiquette RÉELLEMENT envoyée avec ce record
+  const [lit, setLit] = useState<Dot[]>([])      // points deja allumes (persistants)
+  const [base, setBase] = useState<Dot[]>([])    // points a venir (faibles)
+  const [tagA, setTagA] = useState('…')          // etiquette calculee par A (clair), apercu en direct
+  const [record, setRecord] = useState<CipherRecord | null>(null)   // chiffrement reel de ce message (une fois envoye)
+  const [sealTag, setSealTag] = useState<string | null>(null)       // etiquette REELLEMENT envoyee avec ce record
   const [openResult, setOpenResult] = useState<IntegrityOpenResult | null>(null)
 
   const timer = useRef<number | undefined>(undefined)
@@ -82,7 +82,7 @@ export default function IntegrityPanel() {
     timer.current = undefined
   }
 
-  // Étiquette de A (aperçu en direct, sur le clair — avant tout envoi réel).
+  // Etiquette de A (apercu en direct, sur le clair — avant tout envoi reel).
   useEffect(() => {
     if (!protect || !key || !original) { setTagA('…'); return }
     const id = window.setTimeout(() => {
@@ -93,8 +93,8 @@ export default function IntegrityPanel() {
     return () => window.clearTimeout(id)
   }, [key, original, protect])
 
-  // Changer la clé / le message de A remet la scène à zéro.
-  // (Modifier le chiffré réécrit par C ne réinitialise rien : on le tape pendant l'interception.)
+  // Changer la cle / le message de A remet la scene a zero.
+  // (Modifier le chiffre reecrit par C ne reinitialise rien : on le tape pendant l'interception.)
   useEffect(() => {
     resetScene()
     setError(null)
@@ -103,8 +103,8 @@ export default function IntegrityPanel() {
 
   useEffect(() => () => clearTimer(), [])
 
-  // Quand le message arrive chez C, on pré-remplit avec le VRAI chiffré intercepté
-  // (C modifie ce qui transite réellement, pas un texte inventé) et on y met le curseur.
+  // Quand le message arrive chez C, on pre-remplit avec le VRAI chiffre intercepte
+  // (C modifie ce qui transite reellement, pas un texte invente) et on y met le curseur.
   useEffect(() => {
     if (phase === 'atC') {
       setTampered(recordRef.current?.secret ?? '')
@@ -158,14 +158,14 @@ export default function IntegrityPanel() {
   }
 
   async function send() {
-    // mêmes garde-fous que dans les autres pages : un champ vide affiche un message clair
+    // memes garde-fous que dans les autres pages : un champ vide affiche un message clair
     if (protect && !key.trim()) { setError(_t('Indique la clé secrète partagée.')); return }
     if (!original.trim()) { setError(_t('Écris le message de A.')); return }
     setError(null)
     resetScene()
     intercepted.current = false
     try {
-      // A signe le clair, PUIS chiffre (si l'option est activée) avec un algo + une clé tirés au hasard
+      // A signe le clair, PUIS chiffre (si l'option est activee) avec un algo + une cle tires au hasard
       const sealed = await api.integritySeal(key, original, encrypt)
       if (!sealed.ok) { setError(_t('Backend injoignable. Lance le serveur Python.')); return }
       setRecord(sealed.record)
@@ -173,7 +173,7 @@ export default function IntegrityPanel() {
       recordRef.current = sealed.record
       setPhase('leg1')
       runLeg(dotsAlong(A, B, 'green'), () => {
-        if (!intercepted.current) finish(sealed.record)   // arrivé intact
+        if (!intercepted.current) finish(sealed.record)   // arrive intact
       })
     } catch {
       setError(_t('Backend injoignable. Lance le serveur Python.'))
@@ -187,11 +187,11 @@ export default function IntegrityPanel() {
     setBase([])                                     // on abandonne la fin du trajet A→B
     const from = lastDot.current
     setPhase('toC')
-    // le chiffré est tiré vers C, puis on ATTEND : C écrit ce qu'il veut avant de renvoyer
+    // le chiffre est tire vers C, puis on ATTEND : C ecrit ce qu'il veut avant de renvoyer
     runLeg(dotsAlong(from, C, 'green'), () => setPhase('atC'))
   }
 
-  // C a réécrit le chiffré et le transmet à B (segment rouge C→B).
+  // C a reecrit le chiffre et le transmet a B (segment rouge C→B).
   function sendFromC() {
     if (phaseRef.current !== 'atC') return
     if (!tamperRef.current.trim()) { setError(_t('C doit écrire un chiffré à envoyer à B.')); return }
@@ -218,7 +218,7 @@ export default function IntegrityPanel() {
       : openResult!.valid ? '✓ Arrivé intact : les étiquettes correspondent.'
       : '✗ B détecte l’altération : les étiquettes diffèrent.')
 
-  // couleur d'un nœud
+  // couleur d'un noeud
   const nodeColor = (who: 'A' | 'B' | 'C') =>
     who === 'A' ? 'var(--ua)' : who === 'B' ? 'var(--ub)' : 'var(--red)'
 
@@ -262,32 +262,32 @@ export default function IntegrityPanel() {
         )}
       </div>
 
-      {/* ---------------- scène animée du canal ---------------- */}
+      {/* ---------------- scene animee du canal ---------------- */}
       <div className="intg-scene">
         <svg viewBox={`0 0 ${VB.w} ${VB.h}`} className="intg-svg" role="img"
           aria-label={t('Canal entre A et B, avec interception possible par C')}>
-          {/* points à venir (faibles, couleur de l'interface) */}
+          {/* points a venir (faibles, couleur de l'interface) */}
           {base.map((d, i) => (
             <circle key={'b' + i} cx={d.x} cy={d.y} r={3} className="intg-dot intg-dot-base" />
           ))}
-          {/* points allumés (vert = en route, rouge = après C) */}
+          {/* points allumes (vert = en route, rouge = apres C) */}
           {lit.map((d, i) => (
             <circle key={'l' + i} cx={d.x} cy={d.y} r={3.4}
               className={'intg-dot ' + (d.color === 'green' ? 'intg-dot-ok' : 'intg-dot-bad')
                 + (i === lit.length - 1 && sending ? ' is-head' : '')} />
           ))}
 
-          {/* nœud A */}
+          {/* noeud A */}
           <g className="intg-node">
             <circle cx={A.x} cy={A.y} r={18} style={{ stroke: nodeColor('A') }} />
             <text x={A.x} y={A.y + 5} className="intg-node-letter" style={{ fill: nodeColor('A') }}>A</text>
           </g>
-          {/* nœud B */}
+          {/* noeud B */}
           <g className="intg-node">
             <circle cx={B.x} cy={B.y} r={18} style={{ stroke: nodeColor('B') }} />
             <text x={B.x} y={B.y + 5} className="intg-node-letter" style={{ fill: nodeColor('B') }}>B</text>
           </g>
-          {/* nœud C (attaquant), visible seulement après interception */}
+          {/* noeud C (attaquant), visible seulement apres interception */}
           <g className={'intg-node intg-node-c' + (showC ? ' is-on' : '')}>
             <circle cx={C.x} cy={C.y} r={18} style={{ stroke: nodeColor('C') }} />
             <text x={C.x} y={C.y + 5} className="intg-node-letter" style={{ fill: nodeColor('C') }}>C</text>
@@ -316,7 +316,7 @@ export default function IntegrityPanel() {
         {error && <div className="warn error intg-error" role="alert">⚠ {t(error)}</div>}
       </div>
 
-      {/* ---------------- cartes : message + étiquettes ---------------- */}
+      {/* ---------------- cartes : message + etiquettes ---------------- */}
       <div className="intg-cards">
         <div className="party" style={{ borderColor: 'color-mix(in srgb, var(--ua) 45%, var(--border))' }}>
           <div className="party-head" style={{ color: 'var(--ua)' }}>{t('Utilisateur A (expéditeur)')}</div>

@@ -1,10 +1,10 @@
-// Captcha « la clé et les cadenas » : continuité d'un objet dans le temps.
+// Captcha « la cle et les cadenas » : continuite d'un objet dans le temps.
 //
-// Une clé se montre au-dessus d'un cadenas, se range dedans, puis les cadenas
-// s'échangent deux par deux (l'un passe par le haut, l'autre par le bas). Il faut suivre
-// des yeux le cadenas qui garde la clé, puis le désigner. Aucune capture d'écran isolée
-// ne contient la réponse : elle n'existe que dans la suite des mouvements.
-// Tout est décidé par le serveur (quel cadenas, quels échanges, quelles durées) ; la
+// Une cle se montre au-dessus d'un cadenas, se range dedans, puis les cadenas
+// s'echangent deux par deux (l'un passe par le haut, l'autre par le bas). Il faut suivre
+// des yeux le cadenas qui garde la cle, puis le designer. Aucune capture d'ecran isolee
+// ne contient la reponse : elle n'existe que dans la suite des mouvements.
+// Tout est decide par le serveur (quel cadenas, quels echanges, quelles durees) ; la
 // page ne fait que jouer l'animation et rapporter l'emplacement choisi.
 import { useEffect, useRef, useState } from 'react'
 import type { Challenge } from '../../types'

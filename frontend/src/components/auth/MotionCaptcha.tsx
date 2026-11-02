@@ -1,10 +1,10 @@
-// Captcha « mouvement » : quatre caractères cachés dans un nuage de points.
+// Captcha « mouvement » : quatre caracteres caches dans un nuage de points.
 //
-// Chaque point monte ou descend. À l'intérieur des caractères les points vont dans un
-// sens, à l'extérieur dans l'autre. À tout instant, une image fixe est du bruit : les
-// points ont partout la même densité et la même taille. L'œil humain, lui, regroupe sans
-// effort les points qui bougent ensemble, et lit les caractères. (Un modèle qui regarde
-// des captures d'écran n'a qu'un instant figé du bruit.)
+// Chaque point monte ou descend. A l'interieur des caracteres les points vont dans un
+// sens, a l'exterieur dans l'autre. A tout instant, une image fixe est du bruit : les
+// points ont partout la meme densite et la meme taille. L'oeil humain, lui, regroupe sans
+// effort les points qui bougent ensemble, et lit les caracteres. (Un modele qui regarde
+// des captures d'ecran n'a qu'un instant fige du bruit.)
 // Une petite part de points bouge au hasard, et chaque point change de place de temps
 // en temps : il n'existe aucun « point qui trahit le dessin ».
 import { useEffect, useRef } from 'react'
@@ -24,7 +24,7 @@ export default function MotionCaptcha({ ch }: { ch: Challenge }) {
     if (!ctx) return
     ctx.scale(dpr, dpr)
 
-    // le masque : 1 bit par pixel, rangé ligne par ligne (160×56, agrandi ×2)
+    // le masque : 1 bit par pixel, range ligne par ligne (160×56, agrandi ×2)
     const { w: mw, h: mh } = ch.mask
     const raw = atob(ch.mask.bits)
     const bit = (i: number) => (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1
@@ -32,10 +32,10 @@ export default function MotionCaptcha({ ch }: { ch: Challenge }) {
       const i = Math.min(mh - 1, Math.max(0, (y / 2) | 0)) * mw + Math.min(mw - 1, Math.max(0, (x / 2) | 0))
       return bit(i)
     }
-    // Les pixels des deux régions : un point qui change de région n'est pas « bloqué » au
-    // bord (ça y ferait une file de points, visible sur une image fixe), il réapparaît
-    // au hasard DANS SA PROPRE région. La densité reste donc identique dedans et dehors :
-    // seule la direction du mouvement distingue les caractères.
+    // Les pixels des deux regions : un point qui change de region n'est pas « bloque » au
+    // bord (ca y ferait une file de points, visible sur une image fixe), il reapparait
+    // au hasard DANS SA PROPRE region. La densite reste donc identique dedans et dehors :
+    // seule la direction du mouvement distingue les caracteres.
     const fgPix: number[] = [], bgPix: number[] = []
     for (let i = 0; i < mw * mh; i++) (bit(i) ? fgPix : bgPix).push(i)
     const fgShare = fgPix.length / (mw * mh)
@@ -46,7 +46,7 @@ export default function MotionCaptcha({ ch }: { ch: Challenge }) {
     const noise = ch.noise ?? 0.12
     const xs = new Float32Array(N), ys = new Float32Array(N)
     const life = new Int16Array(N), reg = new Uint8Array(N), ang = new Float32Array(N), tone = new Uint8Array(N)
-    // reg : 1 = dans un caractère, 0 = dehors, 2 = point « fou » (marche au hasard, partout)
+    // reg : 1 = dans un caractere, 0 = dehors, 2 = point « fou » (marche au hasard, partout)
     const place = (i: number) => {
       if (reg[i] === 2) { xs[i] = Math.random() * W; ys[i] = Math.random() * H; return }
       const list = reg[i] === 1 ? fgPix : bgPix
@@ -80,7 +80,7 @@ export default function MotionCaptcha({ ch }: { ch: Challenge }) {
         } else {
           ys[i] += (reg[i] ? fg : -fg) * speed * dt
           if (ys[i] < 0) ys[i] += H; else if (ys[i] >= H) ys[i] -= H
-          if (inside(xs[i], ys[i]) !== reg[i]) place(i)            // sorti de sa région : retour au hasard dedans
+          if (inside(xs[i], ys[i]) !== reg[i]) place(i)            // sorti de sa region : retour au hasard dedans
         }
         const v = tone[i]
         ctx.fillStyle = `rgb(${v},${v},${Math.min(255, v + 12)})`

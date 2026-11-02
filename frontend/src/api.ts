@@ -10,7 +10,7 @@ import type {
   CipherRecord, IntegritySealResult, IntegrityOpenResult,
 } from './types'
 
-// Session expirée (le serveur répond 401) : l'appli revient sur la page de connexion.
+// Session expiree (le serveur repond 401) : l'appli revient sur la page de connexion.
 let onUnauthorized: (() => void) | null = null
 export const setUnauthorizedHandler = (fn: (() => void) | null) => { onUnauthorized = fn }
 const guard = (res: Response) => { if (res.status === 401) onUnauthorized?.() }
@@ -47,7 +47,7 @@ async function sendAuth(url: string, payload: AuthPayload): Promise<LoginResult>
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   })
   let body: Partial<LoginResult> = {}
-  try { body = await res.json() } catch { /* réponse vide */ }
+  try { body = await res.json() } catch { /* reponse vide */ }
   return { ok: false, ...body, status: res.status } as LoginResult
 }
 
@@ -59,11 +59,11 @@ export interface CipherInput {
   direction?: 'right' | 'left'
   key?: string
   matrix?: (number | string)[][]
-  // déchiffrement : métadonnées de mise en forme pour retrouver les espaces
+  // dechiffrement : metadonnees de mise en forme pour retrouver les espaces
   layout?: [number, string][]
   fillers?: number[]
   jmap?: number[]                // Playfair : positions des J d'origine (J→I)
-  cases?: number[]               // positions des minuscules (le chiffré est en majuscules)
+  cases?: number[]               // positions des minuscules (le chiffre est en majuscules)
 }
 
 export const api = {
@@ -75,7 +75,7 @@ export const api = {
     if (!res.ok || !body.ok) throw new Error(body.error || 'captcha')
     return body.challenge as Challenge
   },
-  // le défi est abandonné (fenêtre fermée, défi remplacé) : le serveur le détruit
+  // le defi est abandonne (fenetre fermee, defi remplace) : le serveur le detruit
   authDiscard: (id: string) => {
     try {
       void fetch('/api/auth/captcha/discard', {
@@ -84,14 +84,14 @@ export const api = {
     } catch { /* ignore */ }
   },
   login: (payload: AuthPayload) => sendAuth('/api/auth/login', payload),
-  // inscription : mêmes champs et mêmes protections que la connexion
+  // inscription : memes champs et memes protections que la connexion
   register: (payload: AuthPayload) => sendAuth('/api/auth/register', payload),
   logout: async () => { try { await fetch('/api/auth/logout', { method: 'POST' }) } catch { /* ignore */ } },
 
   cipher: (input: CipherInput) => post<CipherResponse>('/api/cipher', input),
 
-  // Échange A ↔ B : vraie paire de clés RSA, coffre fermé avec la clé publique
-  // du destinataire, ouvert avec sa clé privée (tout le calcul est en Python).
+  // Echange A ↔ B : vraie paire de cles RSA, coffre ferme avec la cle publique
+  // du destinataire, ouvert avec sa cle privee (tout le calcul est en Python).
   rsaKeygen: (bits: number) => post<KeygenResponse>('/api/rsa/keygen', { bits }),
 
   exchangeSeal: (params: ExchangeParams, pub: { n: string; e: string }) =>
@@ -101,15 +101,15 @@ export const api = {
     post<OpenResponse>('/api/exchange/open', { n: priv.n, d: priv.d, blocks }),
 
   // limit = limite de tentatives ; rules = politique ; knowComposition = l'attaquant
-  // connaît la composition (jeu de caractères restreint) ou suppose le pire cas
+  // connait la composition (jeu de caracteres restreint) ou suppose le pire cas
   bruteforce: (caseId: string, target: string, length?: number, limit?: number | null, rules?: Rules | null, knowComposition = true) =>
     post<BruteResult>('/api/passwords/bruteforce', { case: caseId, target, length, limit, rules, know_composition: knowComposition }),
 
   dictionary: (target: string, limit?: number | null) =>
     post<DictResult>('/api/passwords/dictionary', { target, limit }),
 
-  // attaque en tâche de fond : vraie boucle côté serveur, à relire par polling
-  // (attackProgress) pour une barre de progression RÉELLE, interruptible pour de
+  // attaque en tache de fond : vraie boucle cote serveur, a relire par polling
+  // (attackProgress) pour une barre de progression REELLE, interruptible pour de
   // vrai (attackStop coupe le thread, pas seulement l'affichage).
   attackStart: (input: AttackStartInput) =>
     post<AttackSnapshot>('/api/passwords/attack/start', {
@@ -144,9 +144,9 @@ export const api = {
   integrityDemo: (key: string, original: string, received: string) =>
     post<IntegrityDemo>('/api/integrity/demo', { key, original, received }),
 
-  // canal A -> B réel : A chiffre (algo tiré au hasard) + signe le clair ; B ouvre
-  // ce qui est arrivé (potentiellement altéré par C dans record.secret) et, si la
-  // protection est active, vérifie l'étiquette.
+  // canal A -> B reel : A chiffre (algo tire au hasard) + signe le clair ; B ouvre
+  // ce qui est arrive (potentiellement altere par C dans record.secret) et, si la
+  // protection est active, verifie l'etiquette.
   integritySeal: (key: string, message: string, encrypt: boolean) =>
     post<IntegritySealResult>('/api/integrity/seal', { key, message, encrypt }),
   integrityOpen: (key: string, record: CipherRecord, protect: boolean, tag: string | null) =>

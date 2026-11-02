@@ -3,9 +3,9 @@ import encryption as en
 A = ord("A")
 
 
-# Trace du chiffre de César : construit les deux rangées d'alphabet (entrée /
-# sortie) et un pas par caractère. Déchiffrer revient à chiffrer dans le sens
-# opposé, d'où le décalage effectif `eff` inversé.
+# Trace du chiffre de Cesar : construit les deux rangees d'alphabet (entree /
+# sortie) et un pas par caractere. Dechiffrer revient a chiffrer dans le sens
+# oppose, d'ou le decalage effectif `eff` inverse.
 def caesar_trace(message, shift, direction, operation):
     if operation == "encrypt":
         eff = -shift if direction == "left" else shift
@@ -39,9 +39,9 @@ def caesar_trace(message, shift, direction, operation):
     }
 
 
-# Trace de Playfair : la grille 5x5 et un pas par digramme, avec la règle
-# appliquée (même ligne, même colonne, ou rectangle) et les positions avant /
-# après. `delta` vaut -1 au déchiffrement pour parcourir la grille à l'envers.
+# Trace de Playfair : la grille 5x5 et un pas par digramme, avec la regle
+# appliquee (meme ligne, meme colonne, ou rectangle) et les positions avant /
+# apres. `delta` vaut -1 au dechiffrement pour parcourir la grille a l'envers.
 def playfair_trace(message, key, operation):
     m = en._playfair_matrix(key)
     clean = en._playfair_clean(message)
@@ -81,8 +81,8 @@ def playfair_trace(message, key, operation):
 
 
 # Trace de Hill : un pas par ligne de la matrice et par bloc, avec les termes du
-# produit, la somme et son modulo 26. Au déchiffrement on utilise l'inverse
-# modulaire de la matrice (lève une exception si elle n'est pas inversible).
+# produit, la somme et son modulo 26. Au dechiffrement on utilise l'inverse
+# modulaire de la matrice (leve une exception si elle n'est pas inversible).
 def hill_trace(message, matrix, operation):
     n = len(matrix)
     if operation == "encrypt":

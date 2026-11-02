@@ -6,7 +6,7 @@ const q = (c: string) => (getLang() === 'en' ? `"${c}"` : `« ${c} »`)
 interface Props {
   trace: CaesarTrace
   index: number
-  showResult?: boolean // sous chaque lettre, son résultat (partie Échange)
+  showResult?: boolean // sous chaque lettre, son resultat (partie Echange)
 }
 
 const show = (ch: string) => (ch === ' ' ? '␣' : ch === '\n' ? '↵' : ch)

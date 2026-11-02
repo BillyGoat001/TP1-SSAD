@@ -1,20 +1,20 @@
-// Des caractères cachés dans le fond de la page de connexion : ils n'apparaissent que là
-// où la lumière du curseur passe. Sous la lumière ils scintillent, certains changent de
-// signe d'un éclair, puis ils retombent dans le noir dès que la lumière s'éloigne.
+// Des caracteres caches dans le fond de la page de connexion : ils n'apparaissent que la
+// ou la lumiere du curseur passe. Sous la lumiere ils scintillent, certains changent de
+// signe d'un eclair, puis ils retombent dans le noir des que la lumiere s'eloigne.
 //
-// Un seul <canvas> : on ne dessine que les cases proches de la lumière (quelques centaines),
-// donc le coût reste négligeable. Aucune boucle ne tourne quand l'onglet est caché.
+// Un seul <canvas> : on ne dessine que les cases proches de la lumiere (quelques centaines),
+// donc le cout reste negligeable. Aucune boucle ne tourne quand l'onglet est cache.
 import { useEffect, useRef } from 'react'
 
 const GLYPHS = Array.from('0123456789ABCDEF0123456789ABCDEFGHJKLMNPQRSTUVWXYZ⊕⊗λΣπ∂∞√#$%&@§<>{}[]/\\|=+*~?!')
 const CELL_W = 24
 const CELL_H = 30
 const FONT_PX = 17
-const RADIUS = 250                 // rayon de la lumière, en pixels
+const RADIUS = 250                 // rayon de la lumiere, en pixels
 
 type Rgb = [number, number, number]
 
-// « #6d4aff » → [109, 74, 255] (les variables du thème sont des couleurs hexadécimales)
+// « #6d4aff » → [109, 74, 255] (les variables du theme sont des couleurs hexadecimales)
 function parseHex(v: string): Rgb | null {
   const m = /^#([0-9a-f]{6})$/i.exec(v.trim())
   if (!m) return null
@@ -37,8 +37,8 @@ export default function GlyphField() {
     let glyph = new Uint8Array(0), flash = new Float32Array(0)
     let phase = new Float32Array(0), rate = new Float32Array(0), next = new Float32Array(0)
     let tone = css([154, 124, 255]), spark = '#ffffff', font = ''
-    let lx = 0, ly = 0, tx = 0, ty = 0          // la lumière (suit le curseur avec un peu d'inertie)
-    let gain = 0.5, targetGain = 0.5            // 0.5 avant le premier geste : la lumière dort au repos
+    let lx = 0, ly = 0, tx = 0, ty = 0          // la lumiere (suit le curseur avec un peu d'inertie)
+    let gain = 0.5, targetGain = 0.5            // 0.5 avant le premier geste : la lumiere dort au repos
     let moved = false
     let root: HTMLElement | null = null
     let blocked = false                         // le curseur est sur la carte ou un bouton
@@ -79,8 +79,8 @@ export default function GlyphField() {
       const r = cv.getBoundingClientRect()
       tx = e.clientX - r.left
       ty = e.clientY - r.top
-      // La carte et les boutons (data-blocker) bloquent la lumière : quand le curseur est dessus,
-      // elle s'éteint entièrement (halo, grille et caractères) et revient dès qu'il en sort.
+      // La carte et les boutons (data-blocker) bloquent la lumiere : quand le curseur est dessus,
+      // elle s'eteint entierement (halo, grille et caracteres) et revient des qu'il en sort.
       blocked = !!(e.target as Element | null)?.closest?.('[data-blocker]')
       targetGain = blocked ? 0 : 1
       if (root) { if (blocked) root.setAttribute('data-blocked', ''); else root.removeAttribute('data-blocked') }
@@ -99,7 +99,7 @@ export default function GlyphField() {
 
       ctx.clearRect(0, 0, W, H)
       if (gain > 0.01) {
-        const R = RADIUS * (1 + 0.05 * Math.sin(t * 1.6))   // la lumière « respire »
+        const R = RADIUS * (1 + 0.05 * Math.sin(t * 1.6))   // la lumiere « respire »
         const c0 = Math.max(0, Math.floor((lx - R) / CELL_W)), c1 = Math.min(cols - 1, Math.floor((lx + R) / CELL_W))
         const r0 = Math.max(0, Math.floor((ly - R) / CELL_H)), r1 = Math.min(rows - 1, Math.floor((ly + R) / CELL_H))
         ctx.font = font
@@ -115,7 +115,7 @@ export default function GlyphField() {
             let f = 1 - Math.sqrt(d2) / R
             f = f * f * (3 - 2 * f)                                 // fondu doux vers le bord
             const i = r * cols + c
-            if (!reduced && t > next[i]) {                          // la case change de signe d'un éclair
+            if (!reduced && t > next[i]) {                          // la case change de signe d'un eclair
               glyph[i] = (Math.random() * GLYPHS.length) | 0
               next[i] = t + 0.6 + Math.random() * 3.4
               flash[i] = 1

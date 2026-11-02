@@ -1,7 +1,7 @@
-// La fenêtre de vérification. Un NOUVEAU défi est tiré à chaque ouverture, à chaque
-// erreur et à chaque clic sur « Autre défi » (jamais deux fois la même sorte de suite) ;
-// fermer la fenêtre abandonne le défi. La preuve de travail se calcule en arrière-plan
-// pendant que la personne résout le défi.
+// La fenetre de verification. Un NOUVEAU defi est tire a chaque ouverture, a chaque
+// erreur et a chaque clic sur « Autre defi » (jamais deux fois la meme sorte de suite) ;
+// fermer la fenetre abandonne le defi. La preuve de travail se calcule en arriere-plan
+// pendant que la personne resout le defi.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
 import type { Challenge, LoginResult } from '../../types'
@@ -20,12 +20,12 @@ const TIPS = {
   illusion: _t("Astuce : cherche où les rayures changent d'inclinaison."),
   shuffle: '',
 } as const
-const READ_MS = 2300          // le serveur refuse une réponse plus rapide qu'un regard humain
+const READ_MS = 2300          // le serveur refuse une reponse plus rapide qu'un regard humain
 
 export default function CaptchaModal({ submit, onClose, onDone }: {
   submit: (p: CaptchaSubmit) => Promise<LoginResult>
   onClose: () => void
-  onDone: (r: LoginResult) => void      // tout résultat qui n'est pas une erreur de captcha
+  onDone: (r: LoginResult) => void      // tout resultat qui n'est pas une erreur de captcha
 }) {
   const [ch, setCh] = useState<Challenge | null>(null)
   const [status, setStatus] = useState<Status>('loading')
@@ -39,7 +39,7 @@ export default function CaptchaModal({ submit, onClose, onDone }: {
   const kind = useRef<string | undefined>(undefined)
   const pow = useRef<PowJob | null>(null)
   const born = useRef(0)
-  const liveId = useRef<string | null>(null)       // le défi affiché : s'il est abandonné, on le détruit côté serveur
+  const liveId = useRef<string | null>(null)       // le defi affiche : s'il est abandonne, on le detruit cote serveur
   const input = useRef<HTMLInputElement>(null)
 
   const shake = () => { setShaking(false); requestAnimationFrame(() => setShaking(true)); setTimeout(() => setShaking(false), 600) }
@@ -75,7 +75,7 @@ export default function CaptchaModal({ submit, onClose, onDone }: {
     }
   }, [load])
 
-  // le temps passe : l'attente de lecture, puis l'expiration du défi
+  // le temps passe : l'attente de lecture, puis l'expiration du defi
   useEffect(() => {
     if (!ch || status !== 'ready') return
     const id = setInterval(() => {
@@ -99,7 +99,7 @@ export default function CaptchaModal({ submit, onClose, onDone }: {
     const job = pow.current
     if (!job) return
     setStatus('checking'); setNotice(null)
-    liveId.current = null                         // la réponse consomme le défi
+    liveId.current = null                         // la reponse consomme le defi
     let nonce = 0
     try { nonce = await job.promise } catch { return }
     let r: LoginResult

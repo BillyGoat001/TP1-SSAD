@@ -55,8 +55,8 @@ import storage
 
 _lock = threading.RLock()
 
-# DATABASE_URL vide ou absent -> SQLite (comportement inchangé). Définie (ex. une
-# chaîne postgresql://... fournie par Neon) -> PostgreSQL, choisi une fois au démarrage.
+# DATABASE_URL vide ou absent -> SQLite (comportement inchange). Definie (ex. une
+# chaine postgresql://... fournie par Neon) -> PostgreSQL, choisi une fois au demarrage.
 DATABASE_URL = (os.environ.get("DATABASE_URL") or "").strip()
 PG = bool(DATABASE_URL)
 
@@ -101,8 +101,8 @@ CREATE TABLE IF NOT EXISTS users (
     created_at  TEXT    NOT NULL
 )
 """
-# Même texte dans les deux moteurs : SQLite a repris la syntaxe UPSERT de PostgreSQL
-# (ON CONFLICT ... DO UPDATE ... excluded.colonne), donc rien à adapter ici.
+# Meme texte dans les deux moteurs : SQLite a repris la syntaxe UPSERT de PostgreSQL
+# (ON CONFLICT ... DO UPDATE ... excluded.colonne), donc rien a adapter ici.
 _ATTEMPTS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS login_attempts (
     username_lc TEXT    NOT NULL,
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 _JSON_FIELDS = ("key", "layout", "fillers", "jmap", "cases")
 
 
-# Chemin du fichier SQLite (créé au besoin). Relu à chaque appel : les tests
+# Chemin du fichier SQLite (cree au besoin). Relu a chaque appel : les tests
 # peuvent rediriger la base avec la variable d'environnement USERS_DB.
 def db_path() -> str:
     p = os.environ.get("USERS_DB")
@@ -126,8 +126,8 @@ def db_path() -> str:
     return os.path.join(storage.data_dir(), "users.db")
 
 
-# Adapte une requête au moteur : les `?` (style SQLite) deviennent `%s` pour
-# PostgreSQL. Aucun `?` n'apparaît ailleurs que comme paramètre dans ce fichier.
+# Adapte une requete au moteur : les `?` (style SQLite) deviennent `%s` pour
+# PostgreSQL. Aucun `?` n'apparait ailleurs que comme parametre dans ce fichier.
 def _q(sql: str) -> str:
     return sql.replace("?", "%s") if PG else sql
 
@@ -147,12 +147,12 @@ def _connect():
     return con
 
 
-# Horodatage UTC ISO 8601 à la seconde.
+# Horodatage UTC ISO 8601 a la seconde.
 def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
-# Convertit une ligne SQL en dict en décodant les champs JSON (None si pas de ligne).
+# Convertit une ligne SQL en dict en decodant les champs JSON (None si pas de ligne).
 def _row(r) -> Optional[Dict[str, Any]]:
     if r is None:
         return None
@@ -162,21 +162,21 @@ def _row(r) -> Optional[Dict[str, Any]]:
     return d
 
 
-# Sérialise les champs d'un enregistrement de chiffrement dans l'ordre des colonnes SQL.
+# Serialise les champs d'un enregistrement de chiffrement dans l'ordre des colonnes SQL.
 def _values(record: Dict[str, Any]) -> tuple:
     return (record["method"], json.dumps(record["key"]), record["secret"],
             json.dumps(record["layout"]), json.dumps(record["fillers"]),
             json.dumps(record["jmap"]), json.dumps(record["cases"]))
 
 
-# Renvoie le compte (champs JSON déjà décodés) ou None. Insensible à la casse.
+# Renvoie le compte (champs JSON deja decodes) ou None. Insensible a la casse.
 def get_user(username: str) -> Optional[Dict[str, Any]]:
     with _lock, closing(_connect()) as con:
         return _row(con.execute(_q("SELECT * FROM users WHERE username_lc = ?"),
                                 ((username or "").strip().lower(),)).fetchone())
 
 
-# Ajoute un compte. False si le nom est déjà pris.
+# Ajoute un compte. False si le nom est deja pris.
 def create_user(username: str, record: Dict[str, Any]) -> bool:
     with _lock, closing(_connect()) as con:
         try:
@@ -191,7 +191,7 @@ def create_user(username: str, record: Dict[str, Any]) -> bool:
             return False
 
 
-# Change le mot de passe d'un compte existant (et le débloque, toutes IP
+# Change le mot de passe d'un compte existant (et le debloque, toutes IP
 # comprises). False s'il n'existe pas.
 def replace_user(username: str, record: Dict[str, Any]) -> bool:
     with _lock, closing(_connect()) as con:
@@ -212,9 +212,9 @@ def delete_user(username: str) -> bool:
         return cur.rowcount > 0
 
 
-# Un compte par ligne, avec l'état de blocage réellement actif : nombre d'IP
-# bloquées et plus grand compteur d'échecs de suite parmi elles (voir
-# login_attempts — remplace l'ancien `blocked`/`failed` globaux, désormais inertes).
+# Un compte par ligne, avec l'etat de blocage reellement actif : nombre d'IP
+# bloquees et plus grand compteur d'echecs de suite parmi elles (voir
+# login_attempts — remplace l'ancien `blocked`/`failed` globaux, desormais inertes).
 def list_users() -> List[Dict[str, Any]]:
     with _lock, closing(_connect()) as con:
         rows = con.execute(_q(
@@ -233,7 +233,7 @@ def count() -> int:
         return con.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
 
 
-# Débloque le compte sur toutes les IP à la fois (make_user.py nom --unlock).
+# Debloque le compte sur toutes les IP a la fois (make_user.py nom --unlock).
 def unlock(username: str) -> bool:
     u = username.lower()
     with _lock, closing(_connect()) as con:
@@ -243,9 +243,9 @@ def unlock(username: str) -> bool:
         return cur.rowcount > 0
 
 
-# Enregistre un échec de connexion de plus DEPUIS CETTE IP sur ce compte. Le
-# couple (compte, IP) est bloqué dès `limit` échecs de suite, sans affecter les
-# autres IP. Renvoie le nombre d'échecs de suite pour ce couple.
+# Enregistre un echec de connexion de plus DEPUIS CETTE IP sur ce compte. Le
+# couple (compte, IP) est bloque des `limit` echecs de suite, sans affecter les
+# autres IP. Renvoie le nombre d'echecs de suite pour ce couple.
 def add_attempt_failure(username: str, ip: str, limit: int) -> int:
     u, now = (username or "").strip().lower(), _now()
     with _lock, closing(_connect()) as con:
@@ -264,7 +264,7 @@ def add_attempt_failure(username: str, ip: str, limit: int) -> int:
         return r["failed"] if r else 0
 
 
-# Connexion réussie depuis cette IP : son compteur sur ce compte repart de zéro.
+# Connexion reussie depuis cette IP : son compteur sur ce compte repart de zero.
 def reset_attempt_failures(username: str, ip: str) -> None:
     u = (username or "").strip().lower()
     with _lock, closing(_connect()) as con:
@@ -273,7 +273,7 @@ def reset_attempt_failures(username: str, ip: str) -> None:
         con.commit()
 
 
-# Ce couple (compte, IP) est-il bloqué ?
+# Ce couple (compte, IP) est-il bloque ?
 def is_attempt_blocked(username: str, ip: str) -> bool:
     u = (username or "").strip().lower()
     with _lock, closing(_connect()) as con:

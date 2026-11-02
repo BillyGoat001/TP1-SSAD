@@ -1,8 +1,8 @@
-// La page de connexion : identifiant + mot de passe, puis un défi anti-robot (fenêtre
-// CaptchaModal). Le serveur vérifie tout ; cette page ne décide jamais de rien.
-// La carte se retourne (lien discret en bas) : au verso, l'inscription, protégée par le
-// même défi anti-robot. Le serveur vérifie aussi les règles du mot de passe ; la liste
-// de contrôle affichée ici sert seulement à guider la saisie.
+// La page de connexion : identifiant + mot de passe, puis un defi anti-robot (fenetre
+// CaptchaModal). Le serveur verifie tout ; cette page ne decide jamais de rien.
+// La carte se retourne (lien discret en bas) : au verso, l'inscription, protegee par le
+// meme defi anti-robot. Le serveur verifie aussi les regles du mot de passe ; la liste
+// de controle affichee ici sert seulement a guider la saisie.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api } from '../../api'
 import type { LoginResult } from '../../types'
@@ -25,7 +25,7 @@ const Flip = () => (
   </svg>
 )
 
-// Les règles du mot de passe (les mêmes que côté serveur, backend/auth.py)
+// Les regles du mot de passe (les memes que cote serveur, backend/auth.py)
 const RULES: { label: string; test: (p: string) => boolean }[] = [
   { label: _t('8 caractères minimum'), test: (p) => p.length >= 8 },
   { label: _t('Une majuscule'), test: (p) => /[A-Z]/.test(p) },
@@ -51,7 +51,7 @@ const BLOCKED = _t('Compte bloqué après 4 mots de passe erronés. Débloque-le
 
 export default function LoginPage({ onSuccess, actions, configured }: {
   onSuccess: (user: string) => void
-  actions: ReactNode            // le sélecteur de langue et le bouton de thème
+  actions: ReactNode            // le selecteur de langue et le bouton de theme
   configured: boolean
 }) {
   const [mode, setMode] = useState<Mode>('login')
@@ -89,7 +89,7 @@ export default function LoginPage({ onSuccess, actions, configured }: {
   const raf = useRef(0)
 
   // la page garde le projecteur sous le curseur, et compte les gestes (le serveur attend
-  // qu'un humain ait bougé la souris ou tapé au clavier avant d'accepter une connexion)
+  // qu'un humain ait bouge la souris ou tape au clavier avant d'accepter une connexion)
   const onPointerMove = (e: React.PointerEvent) => {
     events.current++
     const { clientX: x, clientY: y } = e
@@ -101,14 +101,14 @@ export default function LoginPage({ onSuccess, actions, configured }: {
   }
   useEffect(() => () => cancelAnimationFrame(raf.current), [])
 
-  // la face cachée de la carte ne reçoit ni clic ni focus clavier
+  // la face cachee de la carte ne recoit ni clic ni focus clavier
   useEffect(() => {
     const setInert = (el: HTMLElement | null, v: boolean) => { if (el) (el as HTMLElement & { inert: boolean }).inert = v }
     setInert(front.current, mode !== 'login')
     setInert(back.current, mode !== 'register')
   }, [mode])
 
-  // décompte d'un verrouillage (trop d'échecs depuis cette adresse)
+  // decompte d'un verrouillage (trop d'echecs depuis cette adresse)
   useEffect(() => {
     if (lockLeft <= 0) return
     const id = setInterval(() => setLockLeft((n) => Math.max(0, n - 1)), 1000)
@@ -175,7 +175,7 @@ export default function LoginPage({ onSuccess, actions, configured }: {
 
   const doneReg = (r: LoginResult) => {
     setModal(null)
-    if (r.ok) {                                   // compte créé : retour à la connexion, identifiant prérempli
+    if (r.ok) {                                   // compte cree : retour a la connexion, identifiant prerempli
       setUsername(r.user ?? regUser.trim()); setPassword('')
       setRegUser(''); setRegPw(''); setRegPw2(''); setRegErrs({}); setRegMsg(null); setShowRegPw(false)
       setMessage(null); setAttempts(null); setErrs({})

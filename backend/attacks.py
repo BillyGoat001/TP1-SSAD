@@ -1,20 +1,3 @@
-"""
-Exécution RÉELLE des attaques, en tâche de fond.
-
-Avant ce module, la force brute « cas complexe » et le dictionnaire étaient
-calculés d'un coup (rang exact par formule, ou boucle Python qui finit en une
-poignée de secondes) : le serveur répondait tout de suite, et la barre de
-progression du frontend n'était qu'une ANIMATION rejouée après coup, à la
-vitesse fictive d'un attaquant (10 milliards d'essais/s).
-
-Ici, un clic démarre un vrai thread qui boucle à la vitesse RÉELLE de cette
-machine : la boucle tourne en C compilé (native_attacks.py) quand gcc est
-disponible, avec repli automatique sur une boucle Python ; la progression est un
-compteur partagé relu par polling ; « Interrompre » coupe vraiment la boucle.
-
-passwords.py garde tout le calcul « pur » (espace, rang, dictionnaire,
-estimations théoriques) ; ce module ne fait que le faire tourner pour de vrai.
-"""
 import ctypes
 import itertools
 import threading
@@ -27,15 +10,15 @@ import native_attacks as native
 
 _lock = threading.Lock()
 _runs: Dict[str, "Run"] = {}
-_MAX_AGE = 600           # une attaque terminée est oubliée 10 min après sa fin
-_CHECK_EVERY = 4000       # fréquence de mise à jour du compteur / contrôle d'arrêt (repli Python)
+_MAX_AGE = 600           # une attaque terminee est oubliee 10 min apres sa fin
+_CHECK_EVERY = 4000       # frequence de mise a jour du compteur / controle d'arret (repli Python)
 
 
-# Une attaque en cours (ou terminée) : son état partagé entre le thread qui
-# calcule et les requêtes de progression.
+# Une attaque en cours (ou terminee) : son etat partage entre le thread qui
+# calcule et les requetes de progression.
 class Run:
 
-    # Initialise un identifiant unique et l'état de départ de l'attaque.
+    # Initialise un identifiant unique et l'etat de depart de l'attaque.
     def __init__(self):
         self.id = uuid.uuid4().hex
         self.pos = 0
@@ -47,7 +30,7 @@ class Run:
         self.stop_event = threading.Event()
         self.native_stop = None     # ctypes.c_int() si la boucle C est en cours (voir stop())
 
-    # Photographie de l'état courant pour la réponse HTTP (position, vitesse, résultat).
+    # Photographie de l'etat courant pour la reponse HTTP (position, vitesse, resultat).
     def snapshot(self) -> Dict[str, Any]:
         elapsed = (self.finished_at or time.time()) - self.started
         rate = self.pos / elapsed if elapsed > 0 else 0.0
@@ -57,7 +40,7 @@ class Run:
         }
 
 
-# Oublie les attaques terminées depuis plus de _MAX_AGE (à appeler sous _lock).
+# Oublie les attaques terminees depuis plus de _MAX_AGE (a appeler sous _lock).
 def _prune_locked():
     now = time.time()
     dead = [rid for rid, r in _runs.items() if r.done and r.finished_at and now - r.finished_at > _MAX_AGE]
@@ -65,24 +48,24 @@ def _prune_locked():
         _runs.pop(rid, None)
 
 
-# Enregistre une attaque dans le registre global après un nettoyage des anciennes.
+# Enregistre une attaque dans le registre global apres un nettoyage des anciennes.
 def _register(run: Run) -> None:
     with _lock:
         _prune_locked()
         _runs[run.id] = run
 
 
-# Retrouve une attaque par son identifiant (None si inconnue ou oubliée).
+# Retrouve une attaque par son identifiant (None si inconnue ou oubliee).
 def get(run_id: str) -> Optional[Run]:
     return _runs.get(run_id)
 
 
-_POLL_NATIVE = 0.05   # fréquence à laquelle on recopie le compteur C -> run.pos
+_POLL_NATIVE = 0.05   # frequence a laquelle on recopie le compteur C -> run.pos
 
 
 # Lance `fn` (un appel C bloquant) en recopiant pos_cell.value -> run.pos
-# pendant ce temps. L'appel C relâche le GIL, donc ce thread tourne vraiment en
-# même temps que la boucle C et la progression reste visible par polling HTTP.
+# pendant ce temps. L'appel C relache le GIL, donc ce thread tourne vraiment en
+# meme temps que la boucle C et la progression reste visible par polling HTTP.
 def _run_native(run: Run, pos_cell, fn):
     stop_poll = threading.Event()
 
@@ -112,8 +95,8 @@ def stop(run_id: str) -> bool:
     return True
 
 
-# Remplit run.result à la fin d'une force brute : construit le verdict (trouvé /
-# cassé), la durée RÉELLE écoulée et les estimations théoriques de passwords.py.
+# Remplit run.result a la fin d'une force brute : construit le verdict (trouve /
+# casse), la duree REELLE ecoulee et les estimations theoriques de passwords.py.
 def _finish_brute(run: Run, rank, limit, charset, length, label, space, check, really_looped):
     run.finished_at = time.time()
     cracked = check["valid"] and rank is not None and (limit is None or rank <= int(limit))
@@ -138,9 +121,9 @@ def _finish_brute(run: Run, rank, limit, charset, length, label, space, check, r
     run.done = True
 
 
-# Démarre une attaque par force brute dans un thread de fond et renvoie son Run.
-# Si l'attaquant connaît la composition du mot de passe (cas complexe), il
-# restreint son jeu de caractères au jeu détecté ; sinon il garde le jeu complet.
+# Demarre une attaque par force brute dans un thread de fond et renvoie son Run.
+# Si l'attaquant connait la composition du mot de passe (cas complexe), il
+# restreint son jeu de caracteres au jeu detecte ; sinon il garde le jeu complet.
 def start_bruteforce(target, case, length=None, limit=None, rules=None, know_composition=True) -> Run:
     run = Run()
     charset, length_r, label = pw._resolve_case(case, length)
@@ -159,9 +142,9 @@ def start_bruteforce(target, case, length=None, limit=None, rules=None, know_com
         _finish_brute(run, None, limit, charset, length_r, label, space, check, really_looped=False)
         return run
 
-    # Corps du thread : boucle C quand elle est dispo (et longueur gérable),
+    # Corps du thread : boucle C quand elle est dispo (et longueur gerable),
     # sinon repli sur itertools.product en pur Python ; les deux remontent le
-    # rang du mot de passe trouvé (ou None).
+    # rang du mot de passe trouve (ou None).
     def work():
         rank = None
         if native.available() and 0 < length_r <= 64:
@@ -193,14 +176,14 @@ def start_bruteforce(target, case, length=None, limit=None, rules=None, know_com
     return run
 
 
-# Démarre une attaque par dictionnaire dans un thread de fond et renvoie son Run.
+# Demarre une attaque par dictionnaire dans un thread de fond et renvoie son Run.
 def start_dictionary(target, limit=None, lang="fr") -> Run:
     run = Run()
     run.total = pw.dictionary_size()
     _register(run)
 
     # Corps du thread : trois chemins possibles — scan en C fichier par fichier,
-    # repli sur la petite liste codée en dur, ou boucle Python mot à mot.
+    # repli sur la petite liste codee en dur, ou boucle Python mot a mot.
     def work():
         pos = 0
         found = False
@@ -208,8 +191,8 @@ def start_dictionary(target, limit=None, lang="fr") -> Run:
         paths = pw._dict_paths(lang)
 
         if native.available() and paths:
-            # Chaque fichier est décompressé en mémoire (un seul à la fois) puis
-            # scanné en C. Le buffer est normalisé en UTF-8 car le C compare des
+            # Chaque fichier est decompresse en memoire (un seul a la fois) puis
+            # scanne en C. Le buffer est normalise en UTF-8 car le C compare des
             # octets et `target` est en UTF-8.
             stop_cell = ctypes.c_int(0)
             run.native_stop = stop_cell
@@ -234,8 +217,8 @@ def start_dictionary(target, limit=None, lang="fr") -> Run:
                     break
             else:
                 # for..else : tous les fichiers parcourus sans "break" -> on scanne
-                # le complément ajouté à la main (dictionnaire_extra.txt), TOUJOURS
-                # en dernier, même ordre que pw._iter_words() / pw.dictionary_size().
+                # le complement ajoute a la main (dictionnaire_extra.txt), TOUJOURS
+                # en dernier, meme ordre que pw._iter_words() / pw.dictionary_size().
                 extra_words = list(pw._extra_words())
                 if extra_words:
                     raw = ("\n".join(extra_words) + "\n").encode("utf-8")
@@ -248,7 +231,7 @@ def start_dictionary(target, limit=None, lang="fr") -> Run:
                     elif limit is not None and pos >= int(limit):
                         stopped = True
         elif not paths:
-            # repli ultime : la petite liste codée en dur (voir pw._FALLBACK)
+            # repli ultime : la petite liste codee en dur (voir pw._FALLBACK)
             for w in pw._FALLBACK:
                 pos += 1
                 if w == target:

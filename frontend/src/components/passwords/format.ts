@@ -1,10 +1,10 @@
-// Mise en forme des durées et des nombres d'essais (virgule décimale en français, point en anglais).
+// Mise en forme des durees et des nombres d'essais (virgule decimale en francais, point en anglais).
 import { getLang, locale } from '../../i18n'
 
 const nf = (n: number, maxFrac = 0) => n.toLocaleString(locale(), { maximumFractionDigits: maxFrac })
 const en = () => getLang() === 'en'
 
-// Durée d'une attaque, de la nanoseconde à l'âge de l'univers :
+// Duree d'une attaque, de la nanoseconde a l'age de l'univers :
 // 0,5 ns · 12 µs · 3,4 ms · 8,2 s · 2 min 5 s · 3 h 20 min · 2 j 4 h · 12 ans · 10^21 ans
 // (en anglais : 0.5 ns · … · 2 d 4 h · 12 years · 10^21 years)
 export function fmtDur(sec: number): string {
@@ -36,7 +36,7 @@ export function fmtDur(sec: number): string {
   return `10^${Math.floor(Math.log10(y))} ans`
 }
 
-// Nombre d'essais : entier groupé tant qu'il reste lisible, sinon 3,4 × 10^15
+// Nombre d'essais : entier groupe tant qu'il reste lisible, sinon 3,4 × 10^15
 export function fmtTries(n: number): string {
   if (!isFinite(n)) return '∞'
   if (n < 1e15) return Math.round(n).toLocaleString(locale())

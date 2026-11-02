@@ -11,7 +11,7 @@ const RESULT: Record<PwResult, { label: string; cls: string; tip: string }> = {
 }
 const CASE_LABEL = { binaire: _t('Binaire'), numerique: _t('Numérique'), complexe: _t('Complexe') } as const
 
-// Section dépliante « Historique » des attaques : une ligne par attaque, la plus récente en haut.
+// Section depliante « Historique » des attaques : une ligne par attaque, la plus recente en haut.
 export default function PwHistory({ entries, onRemove, onClear }: {
   entries: PwHistoryEntry[]
   onRemove: (id: number) => void

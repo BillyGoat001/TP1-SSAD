@@ -1,9 +1,9 @@
-// Le logo de la page de connexion : le bouclier + cadenas de l'appli, animé.
+// Le logo de la page de connexion : le bouclier + cadenas de l'appli, anime.
 //   idle      repos : le cadenas respire, un halo pulse doucement
-//   checking  vérification : un anneau en pointillés tourne autour du logo
+//   checking  verification : un anneau en pointilles tourne autour du logo
 //   error     refus : le logo tremble et le bouclier rougit un instant
-//   open      accès accordé : l'anse se lève et pivote, le trou de serrure passe au vert,
-//             deux ondes et quelques étincelles partent du bouclier
+//   open      acces accorde : l'anse se leve et pivote, le trou de serrure passe au vert,
+//             deux ondes et quelques etincelles partent du bouclier
 export type LockState = 'idle' | 'checking' | 'error' | 'open'
 
 const SPARKS = 10

@@ -5,9 +5,9 @@ import { t } from '../../i18n'
 export type Part = 'simple' | 'exchange'
 
 // L'onglet Chiffrement en deux parties : chiffrer un message (la partie
-// d'origine, inchangée) et l'échange entre deux personnes, où RSA transporte
-// l'algorithme et la clé. Les deux restent montées : passer de l'une à l'autre
-// ne perd rien. La partie affichée est mémorisée dans l'adresse (voir App).
+// d'origine, inchangee) et l'echange entre deux personnes, ou RSA transporte
+// l'algorithme et la cle. Les deux restent montees : passer de l'une a l'autre
+// ne perd rien. La partie affichee est memorisee dans l'adresse (voir App).
 export default function CipherTab({ part, onPart }: { part: Part; onPart: (p: Part) => void }) {
   return (
     <div className="cipher-tab">

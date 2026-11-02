@@ -1,7 +1,7 @@
-// En-tête, onglets, partie « Chiffrer un message » (App, CipherTab, CipherPanel,
-// visualisations, lecture pas à pas, historique)
+// En-tete, onglets, partie « Chiffrer un message » (App, CipherTab, CipherPanel,
+// visualisations, lecture pas a pas, historique)
 const cipher: Record<string, string> = {
-  // ---- en-tête et onglets
+  // ---- en-tete et onglets
   'TP Sécurité': 'Security Lab',
   'Chiffrement · Mots de passe · Intégrité': 'Encryption · Passwords · Integrity',
   'Chiffrement': 'Encryption',
@@ -78,7 +78,7 @@ const cipher: Record<string, string> = {
   'ligne {n}': 'row {n}',
   'Correspondance lettre → nombre (A = 0 … Z = 25)': 'Letter → number mapping (A = 0 … Z = 25)',
 
-  // ---- lecture pas à pas
+  // ---- lecture pas a pas
   'Revenir au début': 'Back to the start',
   'Début': 'Start',
   'Étape suivante': 'Next step',

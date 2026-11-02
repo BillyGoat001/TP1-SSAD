@@ -22,7 +22,7 @@ const ALGOS: { id: Algo; label: string }[] = [
 
 type Dir = 'right' | 'left'
 
-// Tout ce qui définit « l'algorithme + la clé » d'une station.
+// Tout ce qui definit « l'algorithme + la cle » d'une station.
 interface Params {
   algo: Algo
   shift: string
@@ -32,7 +32,7 @@ interface Params {
   matrixValid: boolean
 }
 
-// Métadonnées rangées à côté du chiffré (jamais dedans) pour restituer
+// Metadonnees rangees a cote du chiffre (jamais dedans) pour restituer
 // espaces / ponctuation (layout), X de bourrage (fillers), J (jmap) et minuscules (cases).
 interface Meta {
   layout: [number, string][]
@@ -41,7 +41,7 @@ interface Meta {
   cases: number[]
 }
 
-// Un chiffré produit dans la session : avec quelle clé, et ses métadonnées.
+// Un chiffre produit dans la session : avec quelle cle, et ses metadonnees.
 interface Entry {
   params: Params
   meta: Meta
@@ -81,15 +81,15 @@ const EyeOff = () => (
 
 // ---------------------------------------------------------------- helpers ----
 
-// Saisie du message clair : accents retirés, MAJUSCULES/minuscules gardées telles que tapées.
+// Saisie du message clair : accents retires, MAJUSCULES/minuscules gardees telles que tapees.
 const stripAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
-// Saisie d'un chiffré : toujours en majuscules.
+// Saisie d'un chiffre : toujours en majuscules.
 const clean = (s: string) => stripAccents(s).toUpperCase()
 
 const mod26 = (n: bigint) => ((n % 26n) + 26n) % 26n
 
-// Identité « mathématique » d'une clé : deux clés différentes à l'écran mais
-// équivalentes (décalage 3 et 29, « MONARCHY » et « monarchy »…) donnent la même.
+// Identite « mathematique » d'une cle : deux cles differentes a l'ecran mais
+// equivalentes (decalage 3 et 29, « MONARCHY » et « monarchy »…) donnent la meme.
 function keyId(p: Params): string {
   try {
     if (p.algo === 'caesar') {
@@ -108,7 +108,7 @@ function keyId(p: Params): string {
   }
 }
 
-// La clé en texte lisible, pour l'historique.
+// La cle en texte lisible, pour l'historique.
 function keyLabel(p: Params): string {
   if (p.algo === 'caesar') return `${p.shift} (${p.direction === 'right' ? 'droite' : 'gauche'})`
   if (p.algo === 'playfair') return p.playfairKey.trim().toUpperCase()
@@ -132,14 +132,14 @@ function buildInput(p: Params, operation: Operation, message: string, meta?: Met
 
 // ------------------------------------------------------------------ hooks ----
 
-// L'algorithme et la clé d'une station (les deux stations ont chacune la leur).
+// L'algorithme et la cle d'une station (les deux stations ont chacune la leur).
 function useKeyParams() {
   const [algo, setAlgo] = useState<Algo>('caesar')
-  // clés vides au départ : le champ affiche son exemple (« ex. 3 ») et la matrice ses points
+  // cles vides au depart : le champ affiche son exemple (« ex. 3 ») et la matrice ses points
   const [shift, setShift] = useState('')
   const [direction, setDirection] = useState<Dir>('right')
   const [playfairKey, setPlayfairKey] = useState('')
-  // les cases restent en texte : un très grand nombre garde tous ses chiffres jusqu'au backend
+  // les cases restent en texte : un tres grand nombre garde tous ses chiffres jusqu'au backend
   const [matrix, setMatrix] = useState<string[][]>([['', ''], ['', '']])
   const [matrixValid, setMatrixValid] = useState(false)
   // HillMatrixInput ne lit ses cases qu'au montage : on le remonte quand on charge une matrice
@@ -158,22 +158,22 @@ function useKeyParams() {
 }
 type KeyParams = ReturnType<typeof useKeyParams>
 
-// Démonstration + résultat d'une station (animation, lecture pas à pas, flou).
+// Demonstration + resultat d'une station (animation, lecture pas a pas, flou).
 function useDemo() {
   const [resp, setResp] = useState<CipherResponse | null>(null)
   const [revealed, setRevealed] = useState(false)
   const [feeding, setFeeding] = useState(false)       // dissolve + ripple en cours
-  const [showResult, setShowResult] = useState(false) // résultat seulement quand il « sort »
+  const [showResult, setShowResult] = useState(false) // resultat seulement quand il « sort »
   const [animKey, setAnimKey] = useState(0)
-  const [input, setInput] = useState('')              // texte qui entre dans la démonstration
+  const [input, setInput] = useState('')              // texte qui entre dans la demonstration
   const timers = useRef<number[]>([])
 
   const trace = resp && resp.ok ? resp.trace : undefined
   const total = trace ? trace.steps.length : 0
   const pb = usePlayback(total)
   const atEnd = pb.index >= total - 1
-  // pendant l'animation : le résultat se construit lettre par lettre ; à la fin,
-  // on affiche le résultat final du backend (déchiffrement = espaces retrouvés)
+  // pendant l'animation : le resultat se construit lettre par lettre ; a la fin,
+  // on affiche le resultat final du backend (dechiffrement = espaces retrouves)
   const liveOutput = trace ? runningOutput(trace, pb.index) : ''
   const output = atEnd && resp && resp.ok && resp.result != null ? resp.result : liveOutput
 
@@ -206,7 +206,7 @@ function useDemo() {
 }
 type Demo = ReturnType<typeof useDemo>
 
-// Flash vert d'un champ qui vient de recevoir un résultat, puis retour à la normale.
+// Flash vert d'un champ qui vient de recevoir un resultat, puis retour a la normale.
 function useFlash(ms = 1700) {
   const [on, setOn] = useState(false)
   const t = useRef<number | null>(null)
@@ -221,14 +221,14 @@ function useFlash(ms = 1700) {
 
 // ------------------------------------------------------------- components ----
 
-// Algorithme + clé : exactement les mêmes champs des deux côtés.
+// Algorithme + cle : exactement les memes champs des deux cotes.
 function KeyFields({ p, onEdit: onEditRaw }: { p: KeyParams; onEdit: () => void }) {
-  // résultat du dernier fichier de clé choisi (ok ou refusé) ; il disparaît dès qu'on touche à la clé
+  // resultat du dernier fichier de cle choisi (ok ou refuse) ; il disparait des qu'on touche a la cle
   const [note, setNote] = useState<FileNote | null>(null)
   const onEdit = () => { setNote(null); onEditRaw() }
   useEffect(() => { setNote(null) }, [p.algo])
 
-  // UN fichier : son contenu doit être une clé valable pour l'algorithme choisi
+  // UN fichier : son contenu doit etre une cle valable pour l'algorithme choisi
   async function pickKeyFile(file: File) {
     const algo = p.algo
     const read = await readTextFile(file)
@@ -250,7 +250,7 @@ function KeyFields({ p, onEdit: onEditRaw }: { p: KeyParams; onEdit: () => void 
       p.load({ ...base, matrix: r.value, matrixValid: true })
       setNote({ ok: true, name: file.name, info: r.info })
     }
-    onEditRaw() // la clé a changé : on remet la démonstration à zéro
+    onEditRaw() // la cle a change : on remet la demonstration a zero
   }
 
   const keyName = p.algo === 'caesar' ? _t('clé César (un nombre positif)') : p.algo === 'playfair' ? _t('clé Playfair (des lettres)') : _t('clé Hill (une matrice)')
@@ -282,7 +282,7 @@ function KeyFields({ p, onEdit: onEditRaw }: { p: KeyParams; onEdit: () => void 
           </div>
           <div className="field">
             <span className="field-label">{t('Décalage')}</span>
-            {/* uniquement des chiffres ; le champ s'élargit avec le nombre, sans dépasser la carte */}
+            {/* uniquement des chiffres ; le champ s'elargit avec le nombre, sans depasser la carte */}
             <input
               className="text-input" type="text" inputMode="numeric" autoComplete="off"
               placeholder={t('ex. 3')} value={p.shift}
@@ -320,7 +320,7 @@ function KeyFields({ p, onEdit: onEditRaw }: { p: KeyParams; onEdit: () => void 
             const changed = JSON.stringify(cells) !== JSON.stringify(p.matrix)
             p.setMatrix(cells)
             p.setMatrixValid(valid)
-            if (changed) onEdit() // (à l'ouverture, la matrice reportée est identique : pas une modification)
+            if (changed) onEdit() // (a l'ouverture, la matrice reportee est identique : pas une modification)
           }}
         />
       )}
@@ -355,8 +355,8 @@ interface StationProps {
   outputFresh: boolean
 }
 
-// Une station = le même squelette des deux côtés, ligne par ligne :
-// titre · algorithme+clé · champ d'entrée · bouton · démonstration floutée · champ de sortie.
+// Une station = le meme squelette des deux cotes, ligne par ligne :
+// titre · algorithme+cle · champ d'entree · bouton · demonstration floutee · champ de sortie.
 function Station({
   kind, title, p, onEdit, inputLabel, inputPlaceholder, inputValue, onInput, inputFresh, fileLabel,
   actionLabel, onAction, demo, outputLabel, outputPlaceholder, outputFresh,
@@ -375,7 +375,7 @@ function Station({
     if (output) navigator.clipboard?.writeText(output).catch(() => {})
   }
 
-  // UN fichier : son contenu doit être un message valable (texte, au moins une lettre A–Z)
+  // UN fichier : son contenu doit etre un message valable (texte, au moins une lettre A–Z)
   async function pickMessageFile(file: File) {
     const read = await readTextFile(file)
     if (!read.ok) return setMsgNote({ ok: false, name: file.name, problem: read.problem })
@@ -398,7 +398,7 @@ function Station({
           rows={2} value={inputValue} placeholder={inputPlaceholder && t(inputPlaceholder)}
           onChange={(e) => { setMsgNote(null); onInput(kind === 'enc' ? stripAccents(e.target.value) : clean(e.target.value)) }}
         />
-        {/* icône « fichier » hors du champ, en bas à droite */}
+        {/* icone « fichier » hors du champ, en bas a droite */}
         <div className="cp-file-row">
           <FilePicker label={fileLabel} onFile={pickMessageFile} />
         </div>
@@ -473,18 +473,18 @@ function Station({
 
 export default function CipherPanel() {
   const [message, setMessage] = useState('BONJOUR')     // clair (station 1)
-  const [cipherIn, setCipherIn] = useState('')          // chiffré reçu (station 2)
+  const [cipherIn, setCipherIn] = useState('')          // chiffre recu (station 2)
   const left = useKeyParams()
   const right = useKeyParams()
   const enc = useDemo()
   const dec = useDemo()
   const stationsRef = useRef<HTMLDivElement>(null)
-  const cipherFlash = useFlash()   // le chiffré arrive dans le champ de la station 2
-  const encFlash = useFlash()      // le chiffré sort de la station 1
+  const cipherFlash = useFlash()   // le chiffre arrive dans le champ de la station 2
+  const encFlash = useFlash()      // le chiffre sort de la station 1
   const decFlash = useFlash()      // le clair sort de la station 2
 
-  // Les champs de message (clair à gauche, chiffré à droite) grandissent avec le texte, comme dans
-  // l'échange A↔B, et gardent TOUJOURS la même hauteur des deux côtés pour que les stations restent alignées.
+  // Les champs de message (clair a gauche, chiffre a droite) grandissent avec le texte, comme dans
+  // l'echange A↔B, et gardent TOUJOURS la meme hauteur des deux cotes pour que les stations restent alignees.
   useLayoutEffect(() => {
     const fit = () => {
       const tas = Array.from(stationsRef.current?.querySelectorAll<HTMLTextAreaElement>('.cp-input textarea') ?? [])
@@ -497,26 +497,26 @@ export default function CipherPanel() {
     return () => window.removeEventListener('resize', fit)
   }, [message, cipherIn])
 
-  // table des chiffrés produits dans la session (clé = bloc chiffré, lettres seules) :
-  // on y retrouve avec quel algo/clé il a été fait + ses métadonnées (espaces, X, J).
+  // table des chiffres produits dans la session (cle = bloc chiffre, lettres seules) :
+  // on y retrouve avec quel algo/cle il a ete fait + ses metadonnees (espaces, X, J).
   const memo = useRef<Map<string, Entry[]>>(new Map())
 
-  // historique des opérations réussies (la plus récente en premier), rangé dans un fichier du backend
+  // historique des operations reussies (la plus recente en premier), range dans un fichier du backend
   const [history, setHistory] = useState<HistoryEntry[]>([])
-  const localId = useRef(0) // numéros négatifs : lignes que le backend n'a pas pu enregistrer
+  const localId = useRef(0) // numeros negatifs : lignes que le backend n'a pas pu enregistrer
 
   const reloadHistory = () =>
     api.historyList()
       .then((r) => { if (r.ok) setHistory(r.entries) })
       .catch(() => {})
 
-  // au chargement : on retrouve l'historique déjà enregistré
+  // au chargement : on retrouve l'historique deja enregistre
   useEffect(() => {
     let alive = true
     api.historyList()
       .then((r) => {
         if (!alive || !r.ok) return
-        // (une ligne ajoutée entre-temps reste devant)
+        // (une ligne ajoutee entre-temps reste devant)
         setHistory((h) => {
           const known = new Set(h.map((e) => e.id))
           return [...h, ...r.entries.filter((e) => !known.has(e.id))]
@@ -537,12 +537,12 @@ export default function CipherPanel() {
       const r = await api.historyAdd(draft)
       entry = r.ok ? r.entry : { ...draft, id: -(++localId.current) }
     } catch {
-      entry = { ...draft, id: -(++localId.current) } // backend injoignable : la ligne reste visible, sans être enregistrée
+      entry = { ...draft, id: -(++localId.current) } // backend injoignable : la ligne reste visible, sans etre enregistree
     }
     setHistory((h) => [entry, ...h])
   }
 
-  // supprime UNE ligne (à l'écran tout de suite, puis dans le fichier)
+  // supprime UNE ligne (a l'ecran tout de suite, puis dans le fichier)
   const removeOp = (id: number) => {
     setHistory((h) => h.filter((e) => e.id !== id))
     if (id > 0) api.historyRemove(id).then((r) => { if (!r.ok) reloadHistory() }).catch(reloadHistory)
@@ -553,7 +553,7 @@ export default function CipherPanel() {
   }
 
   async function encrypt() {
-    // mêmes garde-fous que l'échange : un champ vide affiche un message clair
+    // memes garde-fous que l'echange : un champ vide affiche un message clair
     if (!/[A-Za-z]/.test(message)) return enc.fail('Écris un message (au moins une lettre).')
     const params = left.snapshot()
     const bad = validateParams(params)
@@ -570,15 +570,15 @@ export default function CipherPanel() {
     if (!r.ok || r.result == null) return enc.fail(r.error ?? 'Le chiffrement a échoué.')
     enc.setResp(r)
 
-    // on retient, pour ce chiffré, de quoi le ramener exactement au clair
+    // on retient, pour ce chiffre, de quoi le ramener exactement au clair
     const cipher = r.result
     const meta: Meta = { layout: r.layout ?? [], fillers: r.fillers ?? [], jmap: r.jmap ?? [], cases: r.cases ?? [] }
     const id = keyId(params)
     const others = (memo.current.get(cipher) ?? []).filter((e) => keyId(e.params) !== id)
     memo.current.set(cipher, [...others, { params, meta }])
 
-    // le chiffré sort de la boîte (1,15 s), puis « part » vers la station 2 :
-    // même algo + même clé recopiés (modifiables), flash vert, démonstration de droite remise à zéro
+    // le chiffre sort de la boite (1,15 s), puis « part » vers la station 2 :
+    // meme algo + meme cle recopies (modifiables), flash vert, demonstration de droite remise a zero
     const wait = Math.max(0, 1150 - (Date.now() - t0))
     enc.later(() => {
       enc.setShowResult(true)
@@ -600,7 +600,7 @@ export default function CipherPanel() {
     const bad = validateParams(params)
     if (bad) return dec.fail(bad)
 
-    // ce chiffré vient-il de cette session ? alors on sait avec quoi il a été fait
+    // ce chiffre vient-il de cette session ? alors on sait avec quoi il a ete fait
     let meta: Meta | undefined
     const entries = memo.current.get(letters)
     if (entries) {
@@ -612,7 +612,7 @@ export default function CipherPanel() {
       }
       meta = hit.meta
     }
-    // avec métadonnées : on déchiffre le bloc de lettres seul (les positions en dépendent)
+    // avec metadonnees : on dechiffre le bloc de lettres seul (les positions en dependent)
     const sent = meta ? letters : text
 
     const t0 = Date.now()

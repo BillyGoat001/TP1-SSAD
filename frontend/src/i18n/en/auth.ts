@@ -1,4 +1,4 @@
-// Page de connexion, captchas, déconnexion (components/auth/*) et messages du serveur
+// Page de connexion, captchas, deconnexion (components/auth/*) et messages du serveur
 // d'authentification (backend/main.py, captcha.py).
 const auth: Record<string, string> = {
   // ---- page de connexion
@@ -48,7 +48,7 @@ const auth: Record<string, string> = {
   'Compte bloqué après 4 mots de passe erronés. Débloque-le avec : python make_user.py nom --unlock':
     'Account blocked after 4 wrong passwords. Unblock it with: python make_user.py name --unlock',
 
-  // ---- fenêtre de vérification
+  // ---- fenetre de verification
   'Vérification de sécurité': 'Security check',
   'Fermer': 'Close',
   "Préparation d'un nouveau défi…": 'Preparing a new challenge…',
@@ -69,7 +69,7 @@ const auth: Record<string, string> = {
   'Impossible de charger le défi. Le serveur est-il lancé ?': 'Could not load the challenge. Is the server running?',
   'Le serveur est injoignable. Réessaie dans un instant.': 'The server is unreachable. Try again in a moment.',
 
-  // ---- consignes (envoyées par le serveur) et animation des cadenas
+  // ---- consignes (envoyees par le serveur) et animation des cadenas
   'Quatre caractères se cachent dans le mouvement des points. Recopie-les.': 'Four characters hide in the motion of the dots. Type them.',
   'Quatre caractères se cachent dans les rayures. Recopie-les.': 'Four characters hide in the stripes. Type them.',
   'Retiens le cadenas qui cache la clé, puis retrouve-le après le mélange.': 'Remember the padlock that hides the key, then find it again after the shuffle.',
@@ -80,7 +80,7 @@ const auth: Record<string, string> = {
   'Où est la clé ? Clique sur le bon cadenas.': 'Where is the key? Click the right padlock.',
   'Cadenas {n}': 'Padlock {n}',
 
-  // ---- réponses du serveur
+  // ---- reponses du serveur
   "Défi raté. Un nouveau défi t'attend.": 'Challenge failed. A new challenge is waiting.',
   "Le défi a expiré. Un nouveau défi t'attend.": 'The challenge has expired. A new challenge is waiting.',
   "Preuve de travail invalide. Un nouveau défi t'attend.": 'Invalid proof of work. A new challenge is waiting.',

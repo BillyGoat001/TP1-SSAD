@@ -16,8 +16,8 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'integrity', label: _t('Intégrité') },
 ]
 
-// La page affichée vit dans l'adresse (#chiffrement, #echange, #mots-de-passe,
-// #integrite) : un rafraîchissement garde la même page.
+// La page affichee vit dans l'adresse (#chiffrement, #echange, #mots-de-passe,
+// #integrite) : un rafraichissement garde la meme page.
 const ROUTES: Record<string, { tab: TabId; part?: Part }> = {
   chiffrement: { tab: 'cipher', part: 'simple' },
   echange: { tab: 'cipher', part: 'exchange' },
@@ -33,7 +33,7 @@ function routeOf(slug: string) {
 function readRoute() {
   return routeOf(hashSlug()) ?? ROUTES.chiffrement
 }
-// La dernière partie ouverte de l'onglet Chiffrement est aussi retenue.
+// La derniere partie ouverte de l'onglet Chiffrement est aussi retenue.
 function savedPart(): Part {
   try {
     return localStorage.getItem('tp-cipher-part') === 'exchange' ? 'exchange' : 'simple'
@@ -46,8 +46,8 @@ function slugOf(tab: TabId, part: Part) {
   return tab === 'passwords' ? 'mots-de-passe' : 'integrite'
 }
 
-// Logo : un bouclier (la sécurité) avec un cadenas fermé au centre. Deux tons : le
-// contour et le cadenas prennent la couleur du texte du carré, l'intérieur celle du carré.
+// Logo : un bouclier (la securite) avec un cadenas ferme au centre. Deux tons : le
+// contour et le cadenas prennent la couleur du texte du carre, l'interieur celle du carre.
 const SsadMark = () => (
   <svg viewBox="3 1.5 18 21.2" aria-hidden="true">
     <path fill="currentColor" d="M12 1.8 3.5 4.6V11c0 5.4 3.5 9.4 8.5 11.4 5-2 8.5-6 8.5-11.4V4.6z" />
@@ -84,7 +84,7 @@ export default function App() {
   const [tab, setTab] = useState<TabId>(() => readRoute().tab)
   const [part, setPart] = useState<Part>(() => readRoute().part ?? savedPart())
   const { theme, toggle } = useTheme()
-  // Langue de l'interface (FR / EN), retenue d'une visite à l'autre. On la fixe AVANT de
+  // Langue de l'interface (FR / EN), retenue d'une visite a l'autre. On la fixe AVANT de
   // dessiner les enfants : tous les t() de ce rendu utilisent la nouvelle langue.
   const [lang, setLangState] = useState<Lang>(getLang)
   if (getLang() !== lang) setLang(lang)
@@ -92,13 +92,13 @@ export default function App() {
     setLang(lang)
     document.title = t('TP Sécurité')
   }, [lang])
-  // La page Mots de passe reste montée (seulement cachée) une fois ouverte : changer
+  // La page Mots de passe reste montee (seulement cachee) une fois ouverte : changer
   // d'onglet n'interrompt donc jamais une attaque en cours.
   const [pwOpened, setPwOpened] = useState(tab === 'passwords')
   useEffect(() => { if (tab === 'passwords') setPwOpened(true) }, [tab])
 
-  // Connexion : le serveur dit si une session est ouverte ; une réponse 401 (session expirée)
-  // en cours de route ramène ici, sur la page de connexion.
+  // Connexion : le serveur dit si une session est ouverte ; une reponse 401 (session expiree)
+  // en cours de route ramene ici, sur la page de connexion.
   const [auth, setAuth] = useState<AuthState>({ st: 'loading' })
   const [entering, setEntering] = useState(false)
   useEffect(() => {
@@ -119,29 +119,29 @@ export default function App() {
     }
   }, [part])
 
-  // L'adresse suit la page affichée (#chiffrement, #integrite…). Tant qu'on n'est pas connecté
-  // elle vaut #login ; la page voulue est gardée en mémoire et revient après la connexion.
-  // (Avant de savoir si une session existe, on ne touche pas à l'adresse.)
+  // L'adresse suit la page affichee (#chiffrement, #integrite…). Tant qu'on n'est pas connecte
+  // elle vaut #login ; la page voulue est gardee en memoire et revient apres la connexion.
+  // (Avant de savoir si une session existe, on ne touche pas a l'adresse.)
   useEffect(() => {
     if (auth.st === 'loading') return
     const slug = auth.st === 'in' ? slugOf(tab, part) : 'login'
     if (window.location.hash !== '#' + slug) window.history.replaceState(null, '', '#' + slug)
   }, [tab, part, auth.st])
 
-  // …et la page suit l'adresse si on la modifie à la main
+  // …et la page suit l'adresse si on la modifie a la main
   useEffect(() => {
     const onHash = () => {
       const slug = hashSlug()
       const wanted = routeOf(slug)
       if (auth.st !== 'in') {
-        if (wanted) { setTab(wanted.tab); if (wanted.part) setPart(wanted.part) }      // pour après la connexion
+        if (wanted) { setTab(wanted.tab); if (wanted.part) setPart(wanted.part) }      // pour apres la connexion
         if (auth.st === 'out' && slug !== 'login') window.history.replaceState(null, '', '#login')
         return
       }
       const r = wanted ?? ROUTES.chiffrement
       setTab(r.tab)
       if (r.part) setPart(r.part)
-      const slugNow = slugOf(r.tab, r.part ?? part)                                    // #login tapé à la main : on y revient
+      const slugNow = slugOf(r.tab, r.part ?? part)                                    // #login tape a la main : on y revient
       if (window.location.hash !== '#' + slugNow) window.history.replaceState(null, '', '#' + slugNow)
     }
     window.addEventListener('hashchange', onHash)

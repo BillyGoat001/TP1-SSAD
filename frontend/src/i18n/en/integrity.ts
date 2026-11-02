@@ -1,4 +1,4 @@
-// Page « Intégrité » (IntegrityPanel.tsx)
+// Page « Integrite » (IntegrityPanel.tsx)
 const integrity: Record<string, string> = {
   'Intégrité du message (HMAC-SHA256)': 'Message integrity (HMAC-SHA256)',
   'Clé secrète partagée (A et B)': 'Shared secret key (A and B)',

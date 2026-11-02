@@ -21,7 +21,7 @@ import tempfile
 import threading
 from typing import Any, Dict, List, Optional
 
-MAX_HISTORY = 200        # au-delà, les plus anciennes lignes sont oubliées
+MAX_HISTORY = 200        # au-dela, les plus anciennes lignes sont oubliees
 MAX_CONVERSATION = 500
 
 HISTORY_FILE = "historique_chiffrements.json"
@@ -31,7 +31,7 @@ CONVERSATION_FILE = "conversation_ab.json"
 _lock = threading.RLock()
 
 
-# Le dossier des fichiers (créé au besoin). Relu à chaque appel : les tests
+# Le dossier des fichiers (cree au besoin). Relu a chaque appel : les tests
 # peuvent le rediriger avec la variable d'environnement DATA_DIR.
 def data_dir() -> str:
     d = os.environ.get("DATA_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -39,13 +39,13 @@ def data_dir() -> str:
     return d
 
 
-# Chemin absolu d'un fichier de données à partir de son nom.
+# Chemin absolu d'un fichier de donnees a partir de son nom.
 def _path(filename: str) -> str:
     return os.path.join(data_dir(), filename)
 
 
 # Lit un fichier JSON et renvoie son dict, ou `default` s'il est absent. Un
-# fichier illisible est mis de côté (renommé .illisible, jamais écrasé en
+# fichier illisible est mis de cote (renomme .illisible, jamais ecrase en
 # silence) avant de repartir sur `default`.
 def _read(filename: str, default: Dict[str, Any]) -> Dict[str, Any]:
     path = _path(filename)
@@ -65,9 +65,9 @@ def _read(filename: str, default: Dict[str, Any]) -> Dict[str, Any]:
     return default
 
 
-# Écriture atomique : écrit dans un fichier temporaire du même dossier puis le
+# Ecriture atomique : ecrit dans un fichier temporaire du meme dossier puis le
 # renomme sur la cible, de sorte que l'ancien fichier reste intact jusqu'au
-# dernier instant (jamais de fichier à moitié écrit).
+# dernier instant (jamais de fichier a moitie ecrit).
 def _write(filename: str, data: Dict[str, Any]) -> None:
     path = _path(filename)
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-", suffix=".json")
@@ -84,27 +84,27 @@ def _write(filename: str, data: Dict[str, Any]) -> None:
         raise
 
 
-# Horodatage UTC ISO 8601 à la seconde, utilisé pour dater chaque enregistrement.
+# Horodatage UTC ISO 8601 a la seconde, utilise pour dater chaque enregistrement.
 def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
 # Dict initial d'un fichier d'historique vide. Format :
 # {"version": 1, "next_id": N, "entries": [...]} ; `entries` va du plus ancien au
-# plus récent, `next_id` ne recule jamais (un numéro supprimé n'est pas réattribué).
+# plus recent, `next_id` ne recule jamais (un numero supprime n'est pas reattribue).
 def _history_default() -> Dict[str, Any]:
     return {"version": 1, "next_id": 1, "entries": []}
 
 
-# Les lignes d'un fichier d'historique, la plus récente en premier.
+# Les lignes d'un fichier d'historique, la plus recente en premier.
 def _entries_list(filename: str) -> List[Dict[str, Any]]:
     with _lock:
         data = _read(filename, _history_default())
         return list(reversed(data.get("entries", [])))
 
 
-# Ajoute une ligne à un historique en lui attribuant un `id` qui ne recule
-# jamais et un horodatage, puis tronque à MAX_HISTORY lignes.
+# Ajoute une ligne a un historique en lui attribuant un `id` qui ne recule
+# jamais et un horodatage, puis tronque a MAX_HISTORY lignes.
 def _entries_add(filename: str, entry: Dict[str, Any]) -> Dict[str, Any]:
     with _lock:
         data = _read(filename, _history_default())
@@ -117,7 +117,7 @@ def _entries_add(filename: str, entry: Dict[str, Any]) -> Dict[str, Any]:
         return saved
 
 
-# Supprime UNE ligne par son id. Renvoie False si elle n'existe pas (déjà supprimée).
+# Supprime UNE ligne par son id. Renvoie False si elle n'existe pas (deja supprimee).
 def _entries_delete(filename: str, entry_id: int) -> bool:
     with _lock:
         data = _read(filename, _history_default())
@@ -130,7 +130,7 @@ def _entries_delete(filename: str, entry_id: int) -> bool:
         return True
 
 
-# Supprime toutes les lignes (le compteur de numéros continue). Renvoie combien.
+# Supprime toutes les lignes (le compteur de numeros continue). Renvoie combien.
 def _entries_clear(filename: str) -> int:
     with _lock:
         data = _read(filename, _history_default())
@@ -140,7 +140,7 @@ def _entries_clear(filename: str) -> int:
         return n
 
 
-# Historique des chiffrements : liste les lignes, la plus récente en premier.
+# Historique des chiffrements : liste les lignes, la plus recente en premier.
 def history_list() -> List[Dict[str, Any]]:
     return _entries_list(HISTORY_FILE)
 
@@ -155,12 +155,12 @@ def history_delete(entry_id: int) -> bool:
     return _entries_delete(HISTORY_FILE, entry_id)
 
 
-# Historique des chiffrements : vide tout et renvoie le nombre supprimé.
+# Historique des chiffrements : vide tout et renvoie le nombre supprime.
 def history_clear() -> int:
     return _entries_clear(HISTORY_FILE)
 
 
-# Historique des attaques sur mots de passe : liste les lignes (même format, autre fichier).
+# Historique des attaques sur mots de passe : liste les lignes (meme format, autre fichier).
 def pw_history_list() -> List[Dict[str, Any]]:
     return _entries_list(PW_HISTORY_FILE)
 
@@ -175,13 +175,13 @@ def pw_history_delete(entry_id: int) -> bool:
     return _entries_delete(PW_HISTORY_FILE, entry_id)
 
 
-# Historique des attaques sur mots de passe : vide tout et renvoie le nombre supprimé.
+# Historique des attaques sur mots de passe : vide tout et renvoie le nombre supprime.
 def pw_history_clear() -> int:
     return _entries_clear(PW_HISTORY_FILE)
 
 
 # Dict initial d'une conversation vide. Format :
-# {"version": 1, "messages": [...]}, rangé dans l'ordre d'envoi.
+# {"version": 1, "messages": [...]}, range dans l'ordre d'envoi.
 def _conversation_default() -> Dict[str, Any]:
     return {"version": 1, "messages": []}
 
@@ -192,8 +192,8 @@ def conversation_list() -> List[Dict[str, Any]]:
         return list(_read(CONVERSATION_FILE, _conversation_default()).get("messages", []))
 
 
-# Ajoute un message à la fin de la conversation. Renvoie None si ce numéro est
-# déjà enregistré (un envoi répété ne crée pas de doublon).
+# Ajoute un message a la fin de la conversation. Renvoie None si ce numero est
+# deja enregistre (un envoi repete ne cree pas de doublon).
 def conversation_add(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     with _lock:
         data = _read(CONVERSATION_FILE, _conversation_default())
@@ -207,7 +207,7 @@ def conversation_add(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return saved
 
 
-# Vide la conversation et renvoie le nombre de messages supprimés.
+# Vide la conversation et renvoie le nombre de messages supprimes.
 def conversation_clear() -> int:
     with _lock:
         data = _read(CONVERSATION_FILE, _conversation_default())

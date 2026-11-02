@@ -34,11 +34,11 @@ import math
 import os
 import string
 
-# -- classes de caractères (cas complexe + politique) ------------------------
+# -- classes de caracteres (cas complexe + politique) ------------------------
 LOWER = string.ascii_lowercase                 # 26
 UPPER = string.ascii_uppercase                 # 26
 DIGITS = string.digits                         # 10
-SYMBOLS = "!@#$%^&*()-_=+[]{};:,.?/"            # 24, sûrs à saisir/générer
+SYMBOLS = "!@#$%^&*()-_=+[]{};:,.?/"            # 24, surs a saisir/generer
 FULL_CHARSET = LOWER + UPPER + DIGITS + SYMBOLS
 
 CLASS_SIZES = {
@@ -53,18 +53,18 @@ CASES = {
     "numerique": {"charset": "1234",       "length": 4, "label": "4 caractères dans {1,2,3,4}"},
     "complexe":  {"charset": FULL_CHARSET, "length": 8, "label": "a-z  A-Z  0-9  symboles"},
 }
-SMALL_CASES = ("binaire", "numerique")        # espace imposé, pas de politique
+SMALL_CASES = ("binaire", "numerique")        # espace impose, pas de politique
 
-# -- hypothèse sur l'attaquant (affichée dans l'interface) --------------------
+# -- hypothese sur l'attaquant (affichee dans l'interface) --------------------
 # 10 milliards d'essais/s : un GPU sur un hachage rapide. Ordre de grandeur.
 FAST_RATE = 1e10
 
-# Au-delà de cette taille d'espace, la boucle réelle figerait : on calcule le
+# Au-dela de cette taille d'espace, la boucle reelle figerait : on calcule le
 # rang de la cible au lieu de parcourir. En dessous, on parcourt pour de vrai.
 LIVE_LOOP_MAX = 5_000_000
 
-# Vrai dictionnaire d'attaque : un dossier de plusieurs fichiers (certains très
-# gros), lus mot par mot sans jamais tout charger en mémoire.
+# Vrai dictionnaire d'attaque : un dossier de plusieurs fichiers (certains tres
+# gros), lus mot par mot sans jamais tout charger en memoire.
 #   dictionnaires/
 #     general_part1.txt.gz, general_part2.txt.gz, general_part3.txt.gz   (toujours en premier)
 #     langues/<nom>.txt                                                   (ensuite, voir _dict_order)
@@ -76,24 +76,24 @@ _LANG_FILES = {
     "polonais": "polonais.txt", "chinois_pinyin": "chinois_pinyin.txt",
     "arabe_arabizi": "arabe_arabizi.txt", "portugais": "portugais.txt", "turc": "turc.txt",
 }
-# ordre des langues "restantes", une fois celle de l'interface et son complément
-# (français/anglais) déjà passées — du plus fourni au plus thin
+# ordre des langues "restantes", une fois celle de l'interface et son complement
+# (francais/anglais) deja passees — du plus fourni au plus thin
 _LANG_REST_ORDER = ["allemand", "espagnol", "neerlandais", "polonais",
                     "chinois_pinyin", "portugais", "turc", "arabe_arabizi", "italien"]
 
-# Repli si le dossier dictionnaires/ n'a pas encore été déposé (ancien fichier unique)
+# Repli si le dossier dictionnaires/ n'a pas encore ete depose (ancien fichier unique)
 _WORDLIST_GZ = os.path.join(os.path.dirname(__file__), "wordlist.txt.gz")
 _WORDLIST_TXT = os.path.join(os.path.dirname(__file__), "wordlist.txt")
 _FALLBACK = ["azerty", "motdepasse", "soleil", "123456", "password", "qwerty",
              "bonjour", "coucou", "doudou", "iloveyou", "admin", "sunshine"]
 
-# Complément ajouté à la main (ex. les PIN à 4 chiffres absents d'un dictionnaire de
-# fuites réelles). Toujours lu EN DERNIER : les positions des mots déjà présents
+# Complement ajoute a la main (ex. les PIN a 4 chiffres absents d'un dictionnaire de
+# fuites reelles). Toujours lu EN DERNIER : les positions des mots deja presents
 # ailleurs (dictionary_size(), les rangs #N des tests) ne bougent jamais.
 _EXTRA_FILE = os.path.join(os.path.dirname(__file__), "dictionnaire_extra.txt")
 
 
-# Itère les mots du complément ajouté à la main (rien si le fichier n'existe pas).
+# Itere les mots du complement ajoute a la main (rien si le fichier n'existe pas).
 def _extra_words():
     if not os.path.exists(_EXTRA_FILE):
         return
@@ -103,12 +103,12 @@ def _extra_words():
             if w:
                 yield w
 
-_dict_size = None          # taille du dictionnaire, comptée une seule fois
+_dict_size = None          # taille du dictionnaire, comptee une seule fois
 
 
 # Ordre de lecture des langues : d'abord la langue de l'interface, puis l'autre de
-# français/anglais, puis le reste. L'ensemble lu est toujours le même ; seul
-# l'ordre dépend de `lang`.
+# francais/anglais, puis le reste. L'ensemble lu est toujours le meme ; seul
+# l'ordre depend de `lang`.
 def _dict_order(lang="fr"):
     first_lang = "francais" if lang == "fr" else "anglais"
     second_lang = "anglais" if lang == "fr" else "francais"
@@ -116,9 +116,9 @@ def _dict_order(lang="fr"):
     return [first_lang, second_lang] + rest
 
 
-# Liste ordonnée des fichiers à lire, avec leur encodage ('utf-8' pour le dossier
+# Liste ordonnee des fichiers a lire, avec leur encodage ('utf-8' pour le dossier
 # dictionnaires/, 'latin-1' pour l'ancien wordlist.txt(.gz) en repli). Renvoie []
-# si même le repli est absent (on utilise alors _FALLBACK, géré à part).
+# si meme le repli est absent (on utilise alors _FALLBACK, gere a part).
 def _dict_paths(lang="fr"):
     if os.path.isdir(_DICT_DIR):
         paths = [os.path.join(_DICT_DIR, p) for p in _GENERAL_PARTS]
@@ -131,9 +131,9 @@ def _dict_paths(lang="fr"):
     return []
 
 
-# Parcourt tout le dictionnaire mot par mot, sans jamais tout charger en mémoire.
-# `lang` ne change que l'ORDRE de lecture, pas le total. Le complément
-# (_extra_words) est toujours ajouté EN DERNIER, fichier principal présent ou non.
+# Parcourt tout le dictionnaire mot par mot, sans jamais tout charger en memoire.
+# `lang` ne change que l'ORDRE de lecture, pas le total. Le complement
+# (_extra_words) est toujours ajoute EN DERNIER, fichier principal present ou non.
 def _iter_words(lang="fr"):
     paths = _dict_paths(lang)
     if not paths:
@@ -151,7 +151,7 @@ def _iter_words(lang="fr"):
     yield from _extra_words()
 
 
-# Nombre de mots du dictionnaire (compté une fois puis mémorisé) — le même quel
+# Nombre de mots du dictionnaire (compte une fois puis memorise) — le meme quel
 # que soit `lang`.
 def dictionary_size():
     global _dict_size
@@ -160,13 +160,13 @@ def dictionary_size():
     return _dict_size
 
 
-# Taille de l'espace de recherche : nombre de caractères possibles puissance longueur.
+# Taille de l'espace de recherche : nombre de caracteres possibles puissance longueur.
 def keyspace(charset, length):
     return len(charset) ** length
 
 
-# (charset, longueur, libellé) d'un cas ; la longueur n'est modifiable que pour le
-# cas « complexe », et bornée à 0..64.
+# (charset, longueur, libelle) d'un cas ; la longueur n'est modifiable que pour le
+# cas « complexe », et bornee a 0..64.
 def _resolve_case(case, length=None):
     if case not in CASES:
         raise ValueError(f"Cas inconnu « {case} ». Utilise : {', '.join(CASES)}.")
@@ -176,29 +176,29 @@ def _resolve_case(case, length=None):
     return cfg["charset"], chosen, cfg["label"]
 
 
-# ---- mise en forme française -------------------------------------------------
+# ---- mise en forme francaise -------------------------------------------------
 NBSP = " "
 
 
-# Arrondit x à 2 chiffres significatifs : 1234 -> 1200 ; 0,0333 -> 0,033.
+# Arrondit x a 2 chiffres significatifs : 1234 -> 1200 ; 0,0333 -> 0,033.
 def _round2(x):
     return float(f"{x:.2g}")
 
 
-# Formate un nombre à la française : 1.2 -> '1,2' ; 15.0 -> '15' ; 45000 -> '45 000'.
+# Formate un nombre a la francaise : 1.2 -> '1,2' ; 15.0 -> '15' ; 45000 -> '45 000'.
 def _num(x):
     if x == int(x):
         return f"{int(x):,}".replace(",", NBSP)
     return f"{x:g}".replace(".", ",")
 
 
-# Renvoie 's' pour un pluriel (n >= 2), chaîne vide sinon.
+# Renvoie 's' pour un pluriel (n >= 2), chaine vide sinon.
 def _plural(n):
     return "s" if n >= 2 else ""
 
 
-# Nombre de combinaisons lisible : groupé si petit, sinon notation scientifique
-# française (3,4 × 10^15).
+# Nombre de combinaisons lisible : groupe si petit, sinon notation scientifique
+# francaise (3,4 × 10^15).
 def fmt_count(n):
     if n < 1_000_000_000:
         return f"{n:,}".replace(",", NBSP)
@@ -207,7 +207,7 @@ def fmt_count(n):
     return f"{s[0]},{s[1:3]} × 10^{exp}"
 
 
-# Vitesse d'un attaquant en français : 1e10 -> '10 milliards d'essais/s'.
+# Vitesse d'un attaquant en francais : 1e10 -> '10 milliards d'essais/s'.
 def fmt_rate(r):
     if r >= 1e9:
         n = _round2(r / 1e9)
@@ -219,13 +219,13 @@ def fmt_rate(r):
     return f"{_num(n)} essai{_plural(n)}/s"
 
 
-YEAR = 31_536_000.0                  # secondes dans une année
+YEAR = 31_536_000.0                  # secondes dans une annee
 
 
-# (libellé français, catégorie de force) pour une durée en secondes. Une seule
-# échelle pour tout le site (les libellés courts du tableau utilisent compact=True).
-# Catégories : instant / faible / moyen / fort / inviolable. Au-delà du millénaire,
-# on passe en puissances de 10 (10^k ans) plutôt qu'en « milliards d'années ».
+# (libelle francais, categorie de force) pour une duree en secondes. Une seule
+# echelle pour tout le site (les libelles courts du tableau utilisent compact=True).
+# Categories : instant / faible / moyen / fort / inviolable. Au-dela du millenaire,
+# on passe en puissances de 10 (10^k ans) plutot qu'en « milliards d'annees ».
 def human_time(seconds, compact=False):
     s = seconds
     if s is None or s == float("inf"):
@@ -259,7 +259,7 @@ def human_time(seconds, compact=False):
     return f"10^{k} ans", "inviolable"
 
 
-# Estimation { espace, bits, temps } pour un alphabet et une longueur donnés.
+# Estimation { espace, bits, temps } pour un alphabet et une longueur donnes.
 def estimate_for(alphabet_size, length, rate=FAST_RATE):
     space = int(alphabet_size) ** int(length)
     try:
@@ -280,9 +280,9 @@ def estimate_for(alphabet_size, length, rate=FAST_RATE):
     }
 
 
-# ------------------------------------------------------- tableau des durées ----
+# ------------------------------------------------------- tableau des durees ----
 TABLE_LENGTHS = [4, 6, 8, 10, 12, 16]
-TABLE_ALPHABETS = [                      # (nom, détail, taille de l'alphabet)
+TABLE_ALPHABETS = [                      # (nom, detail, taille de l'alphabet)
     ("Chiffres", "0-9", 10),
     ("Minuscules", "a-z", 26),
     ("+ Majusc.", "a-z A-Z", 52),
@@ -291,8 +291,8 @@ TABLE_ALPHABETS = [                      # (nom, détail, taille de l'alphabet)
 ]
 
 
-# Construit le tableau « durée pour épuiser l'espace » selon la longueur et le type
-# de caractères (mêmes seuils et mots que le reste du site).
+# Construit le tableau « duree pour epuiser l'espace » selon la longueur et le type
+# de caracteres (memes seuils et mots que le reste du site).
 def speed_table(rate=FAST_RATE):
     rows = []
     for length in TABLE_LENGTHS:
@@ -309,8 +309,8 @@ def speed_table(rate=FAST_RATE):
     }
 
 
-# Ensemble des classes de caractères présentes dans le mot de passe ('other' pour
-# ce qui est hors du jeu autorisé).
+# Ensemble des classes de caracteres presentes dans le mot de passe ('other' pour
+# ce qui est hors du jeu autorise).
 def classes_present(password):
     present = set()
     for ch in password:
@@ -323,13 +323,13 @@ def classes_present(password):
         elif ch in SYMBOLS:
             present.add("symbol")
         else:
-            present.add("other")          # hors du jeu autorisé
+            present.add("other")          # hors du jeu autorise
     return present
 
 
-# Jeu de caractères RÉELLEMENT utilisé par le mot de passe (cas complexe) : un mot
+# Jeu de caracteres REELLEMENT utilise par le mot de passe (cas complexe) : un mot
 # de passe en minuscules seules donne 'a-z' (26), pas le jeu complet — la force
-# brute n'a pas à supposer des symboles absents.
+# brute n'a pas a supposer des symboles absents.
 def detected_charset(target):
     present = classes_present(target) - {"other"}
     parts = []
@@ -362,7 +362,7 @@ def validate(target, case, length=None, rules=None):
             reasons.append(f"il faut exactement {fixed_len} caractères")
         return {"valid": not reasons, "reasons": reasons}
 
-    # --- cas complexe : jeu autorisé + politique optionnelle ---
+    # --- cas complexe : jeu autorise + politique optionnelle ---
     r = rules or {}
     present = classes_present(target)
     if "other" in present:
@@ -379,7 +379,7 @@ def validate(target, case, length=None, rules=None):
     return {"valid": not reasons, "reasons": reasons}
 
 
-# Numéro d'essai (1-based) auquel la force brute, parcourant les combinaisons dans
+# Numero d'essai (1-based) auquel la force brute, parcourant les combinaisons dans
 # l'ordre, tomberait sur la cible. None si la cible n'est pas une combinaison
 # valide de ce charset / cette longueur.
 def rank_of(target, charset, length):
@@ -395,11 +395,11 @@ def rank_of(target, charset, length):
     return r + 1
 
 
-# Prépare la force brute : valide la cible, donne l'espace, l'estimation pire-cas
+# Prepare la force brute : valide la cible, donne l'espace, l'estimation pire-cas
 # et le rang de la cible (le front anime la progression). Pour un petit espace on
-# parcourt réellement ; pour l'espace complexe on calcule le rang exact. `limit`
-# borne les essais ; `know_composition` restreint le jeu aux classes réellement
-# présentes (sinon pire cas, jeu complet).
+# parcourt reellement ; pour l'espace complexe on calcule le rang exact. `limit`
+# borne les essais ; `know_composition` restreint le jeu aux classes reellement
+# presentes (sinon pire cas, jeu complet).
 def brute_force(target, case, length=None, limit=None, rules=None, know_composition=True):
     charset, length, label = _resolve_case(case, length)
     check = validate(target, case, length, rules)
@@ -416,7 +416,7 @@ def brute_force(target, case, length=None, limit=None, rules=None, know_composit
     if not check["valid"]:
         rank = None
     elif space <= LIVE_LOOP_MAX:
-        # petit espace : on parcourt POUR DE VRAI jusqu'à la cible
+        # petit espace : on parcourt POUR DE VRAI jusqu'a la cible
         really_looped = True
         rank = None
         attempts = 0
@@ -431,7 +431,7 @@ def brute_force(target, case, length=None, limit=None, rules=None, know_composit
 
     cracked = rank is not None and (limit is None or rank <= int(limit))
 
-    # temps pour ATTEINDRE la cible (au rang trouvé), à la vitesse de référence
+    # temps pour ATTEINDRE la cible (au rang trouve), a la vitesse de reference
     if rank is not None:
         find_seconds = rank / FAST_RATE
         find_human, find_strength = human_time(find_seconds)
@@ -456,14 +456,14 @@ def brute_force(target, case, length=None, limit=None, rules=None, know_composit
         "findSeconds": find_seconds,
         "findHuman": find_human,              # temps pour atteindre la cible
         "findStrength": find_strength,
-        "reallyLooped": really_looped,        # True = boucle réelle, pas un calcul
+        "reallyLooped": really_looped,        # True = boucle reelle, pas un calcul
         "limit": int(limit) if limit is not None else None,
         "cracked": cracked,
     }
 
 
-# Lit le dictionnaire mot par mot jusqu'à la cible (ou la limite de tentatives).
-# Renvoie la position trouvée et la taille totale.
+# Lit le dictionnaire mot par mot jusqu'a la cible (ou la limite de tentatives).
+# Renvoie la position trouvee et la taille totale.
 def dictionary_attack(target, limit=None, lang="fr"):
     size = dictionary_size()
     pos = 0
@@ -481,7 +481,7 @@ def dictionary_attack(target, limit=None, lang="fr"):
             "limit": int(limit) if limit is not None else None}
 
 
-# Hypothèses d'attaque exposées à l'interface (vitesse de référence, seuil de boucle réelle).
+# Hypotheses d'attaque exposees a l'interface (vitesse de reference, seuil de boucle reelle).
 def assumptions():
     return {
         "fastRate": FAST_RATE,

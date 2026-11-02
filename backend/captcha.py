@@ -55,19 +55,19 @@ _lock = threading.RLock()
 _store: Dict[str, Dict[str, Any]] = {}
 _rng = random.SystemRandom()
 
-# pas d'O/0, I/1/L, S/5, Z/2, B/8 : les caractères qui se ressemblent sont retirés
+# pas d'O/0, I/1/L, S/5, Z/2, B/8 : les caracteres qui se ressemblent sont retires
 _ALPHABET = "ACDEFGHJKMNPRTUVWXY34679"
 
 
-# Encode une image PIL en data URL PNG (base64), prête à être mise dans du HTML.
+# Encode une image PIL en data URL PNG (base64), prete a etre mise dans du HTML.
 def _data_url(im: Image.Image) -> str:
     buf = io.BytesIO()
     im.save(buf, "PNG")
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-# Charge une police grasse à la taille voulue, en essayant plusieurs chemins
-# connus (Linux, macOS, Windows) avant de retomber sur la police par défaut.
+# Charge une police grasse a la taille voulue, en essayant plusieurs chemins
+# connus (Linux, macOS, Windows) avant de retomber sur la police par defaut.
 def _font(size: int) -> ImageFont.FreeTypeFont:
     for path in (
         "DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -81,7 +81,7 @@ def _font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default(size=size)
 
 
-# Dessine les caractères en blanc sur fond noir, chacun un peu penché et décalé
+# Dessine les caracteres en blanc sur fond noir, chacun un peu penche et decale
 # (le masque qui sert de forme aux trois captchas).
 def _glyph_mask(text: str, w: int, h: int, size: int, tilt: float = 9, jitter: int = 4) -> Image.Image:
     mask = Image.new("L", (w, h), 0)
@@ -102,8 +102,8 @@ def _glyph_mask(text: str, w: int, h: int, size: int, tilt: float = 9, jitter: i
 MW, MH = 160, 56            # le masque (le canvas du navigateur l'agrandit ×2)
 
 
-# Fabrique un captcha « mouvement » : encode le masque des 4 caractères en bits
-# et renvoie (données publiques, secret, durée minimale avant réponse).
+# Fabrique un captcha « mouvement » : encode le masque des 4 caracteres en bits
+# et renvoie (donnees publiques, secret, duree minimale avant reponse).
 def _make_motion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     text = "".join(_rng.choice(_ALPHABET) for _ in range(4))
     mask = _glyph_mask(text, MW, MH, 52)
@@ -119,7 +119,7 @@ def _make_motion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
         bits.append(cur << (8 - n))
     public = {
         "width": MW * 2, "height": MH * 2, "mask": {"w": MW, "h": MH, "bits": base64.b64encode(bytes(bits)).decode()},
-        "fg_dir": _rng.choice((-1, 1)),                         # sens des points DANS les caractères
+        "fg_dir": _rng.choice((-1, 1)),                         # sens des points DANS les caracteres
         "speed": _rng.randint(46, 64),                          # pixels par seconde
         "dots": _rng.randint(2300, 2700), "noise": 0.12,        # part de points qui bougent au hasard
         "prompt": "Quatre caractères se cachent dans le mouvement des points. Recopie-les.",
@@ -128,14 +128,14 @@ def _make_motion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
 
 
 IW, IH = 330, 112
-ILLUSION_ANGLE = 26        # écart d'inclinaison des rayures dans les caractères (degrés) : 0 = phase seule (très dur à lire,
-                           # même pour un humain) ; 34 = plus facile pour tout le monde, y compris pour un modèle de vision
+ILLUSION_ANGLE = 26        # ecart d'inclinaison des rayures dans les caracteres (degres) : 0 = phase seule (tres dur a lire,
+                           # meme pour un humain) ; 34 = plus facile pour tout le monde, y compris pour un modele de vision
 
 
-# Renvoie une couleur de teinte `hue` dont la luminance perçue vaut `luma` (0..1),
-# trouvée par dichotomie sur la clarté HLS. Nécessaire car deux teintes à clarté
-# HLS égale n'ont pas la même luminance perçue (le bleu paraît plus sombre que le
-# jaune), ce qui gâcherait le contraste contrôlé entre les bandes.
+# Renvoie une couleur de teinte `hue` dont la luminance percue vaut `luma` (0..1),
+# trouvee par dichotomie sur la clarte HLS. Necessaire car deux teintes a clarte
+# HLS egale n'ont pas la meme luminance percue (le bleu parait plus sombre que le
+# jaune), ce qui gacherait le contraste controle entre les bandes.
 def _tone(hue: float, luma: float, sat: float = 0.55) -> Tuple[int, int, int]:
     lo, hi = 0.02, 0.98
     rgb = (0, 0, 0)
@@ -151,21 +151,21 @@ def _tone(hue: float, luma: float, sat: float = 0.55) -> Tuple[int, int, int]:
     return rgb
 
 
-# Fabrique un captcha « illusion de contour » : rayures dont la phase est décalée
-# à l'intérieur des caractères, plus quelques taches leurres. Renvoie (public,
-# secret, durée minimale).
+# Fabrique un captcha « illusion de contour » : rayures dont la phase est decalee
+# a l'interieur des caracteres, plus quelques taches leurres. Renvoie (public,
+# secret, duree minimale).
 def _make_illusion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     text = "".join(_rng.choice(_ALPHABET) for _ in range(4))
     mask = _glyph_mask(text, IW, IH, 98, tilt=7, jitter=3)
-    # quelques taches qui ont le même décalage : elles brouillent la lecture
+    # quelques taches qui ont le meme decalage : elles brouillent la lecture
     dm = ImageDraw.Draw(mask)
     for _ in range(4):
         x, y, r = _rng.randint(0, IW), _rng.randint(0, IH), _rng.randint(7, 15)
         dm.ellipse([x - r, y - r, x + r, y + r], fill=255 if mask.getpixel((min(IW - 1, x), min(IH - 1, y))) == 0 else 0)
     h1 = _rng.random()
     h2 = (h1 + _rng.uniform(0.08, 0.16)) % 1                 # deux teintes voisines : des rayures trop vives
-    c1 = _tone(h1, 0.64)                                      # vibrent et masquent le décalage. Les deux
-    c2 = _tone(h2, 0.44)                                      # bandes ont une LUMINANCE perçue fixe : sans ça
+    c1 = _tone(h1, 0.64)                                      # vibrent et masquent le decalage. Les deux
+    c2 = _tone(h2, 0.44)                                      # bandes ont une LUMINANCE percue fixe : sans ca
                                                               # un bleu et un violet se confondent
     period = _rng.choice((6, 7))                    # deux bandes de period/2 pixels
     ang = math.radians(_rng.choice((28, 38, 52, 62)))
@@ -176,7 +176,7 @@ def _make_illusion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     mv = mask.tobytes()
     for y in range(IH):
         for x in range(IW):
-            if mv[y * IW + x] > 127:       # dans un caractère : rayures décalées d'une demi-période (et un peu penchées)
+            if mv[y * IW + x] > 127:       # dans un caractere : rayures decalees d'une demi-periode (et un peu penchees)
                 u = (x * cb + y * sb + off + period / 2) % period
             else:
                 u = (x * ca + y * sa + off) % period
@@ -188,13 +188,13 @@ def _make_illusion() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     return public, {"text": text}, 2.0
 
 
-# Fabrique un captcha « clé et cadenas » : enregistre une suite d'échanges de
-# position et retient l'emplacement final du cadenas qui cache la clé. Renvoie
-# (public, secret, durée totale de l'animation).
+# Fabrique un captcha « cle et cadenas » : enregistre une suite d'echanges de
+# position et retient l'emplacement final du cadenas qui cache la cle. Renvoie
+# (public, secret, duree totale de l'animation).
 def _make_shuffle() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
     n = 5
-    pos = list(range(n))                      # pos[emplacement] = numéro du cadenas qui s'y trouve
-    key_lock = _rng.randrange(n)              # le cadenas qui cache la clé (il la garde en bougeant)
+    pos = list(range(n))                      # pos[emplacement] = numero du cadenas qui s'y trouve
+    key_lock = _rng.randrange(n)              # le cadenas qui cache la cle (il la garde en bougeant)
     swaps: List[List[int]] = []
     last: Optional[Tuple[int, int]] = None
     for _ in range(_rng.randint(9, 11)):
@@ -205,7 +205,7 @@ def _make_shuffle() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
         last = (min(a, b), max(a, b))
         pos[a], pos[b] = pos[b], pos[a]
         swaps.append([a, b, _rng.randint(430, 620)])
-    start = key_lock                          # au départ, le cadenas k est à l'emplacement k
+    start = key_lock                          # au depart, le cadenas k est a l'emplacement k
     final = pos.index(key_lock)
     reveal = 1700
     total = (reveal + sum(s[2] for s in swaps)) / 1000
@@ -217,7 +217,7 @@ def _make_shuffle() -> Tuple[Dict[str, Any], Dict[str, Any], float]:
 _MAKERS = {"motion": _make_motion, "illusion": _make_illusion, "shuffle": _make_shuffle}
 
 
-# Vrai si sha256(challenge:nonce) commence par `bits` zéros (vérifie la preuve de travail).
+# Vrai si sha256(challenge:nonce) commence par `bits` zeros (verifie la preuve de travail).
 def pow_ok(challenge: str, nonce: Any, bits: int) -> bool:
     try:
         digest = hashlib.sha256(f"{challenge}:{int(nonce)}".encode()).digest()
@@ -227,9 +227,9 @@ def pow_ok(challenge: str, nonce: Any, bits: int) -> bool:
     return val >> (256 - bits) == 0
 
 
-# Crée un nouveau captcha, d'une sorte différente de `exclude` (le précédent) si
-# possible, et le range en mémoire. `extra_bits` renforce la preuve de travail
-# après des échecs. Purge au passage les captchas expirés et les plus vieux.
+# Cree un nouveau captcha, d'une sorte differente de `exclude` (le precedent) si
+# possible, et le range en memoire. `extra_bits` renforce la preuve de travail
+# apres des echecs. Purge au passage les captchas expires et les plus vieux.
 def new_challenge(exclude: Optional[str] = None, extra_bits: int = 0, now: Optional[float] = None) -> Dict[str, Any]:
     now = now if now is not None else time.time()
     kinds = [k for k in KINDS if k != exclude] or list(KINDS)
@@ -249,8 +249,8 @@ def new_challenge(exclude: Optional[str] = None, extra_bits: int = 0, now: Optio
     return {"id": cid, "kind": kind, "ttl": TTL, "pow": {"challenge": pow_challenge, "bits": bits}, **public}
 
 
-# Vérifie une réponse et renvoie 'ok' ou la raison du refus (unknown · expired ·
-# pow · fast · wrong). Le captcha est détruit quoi qu'il arrive (usage unique).
+# Verifie une reponse et renvoie 'ok' ou la raison du refus (unknown · expired ·
+# pow · fast · wrong). Le captcha est detruit quoi qu'il arrive (usage unique).
 def verify(cid: str, answer: Any, nonce: Any = None, now: Optional[float] = None) -> str:
     now = now if now is not None else time.time()
     with _lock:
@@ -272,7 +272,7 @@ def verify(cid: str, answer: Any, nonce: Any = None, now: Optional[float] = None
         return "wrong"
 
 
-# Abandonne un défi (fenêtre fermée, défi remplacé) : il ne pourra plus servir.
+# Abandonne un defi (fenetre fermee, defi remplace) : il ne pourra plus servir.
 def discard(cid: str) -> bool:
     with _lock:
         return _store.pop(str(cid), None) is not None
@@ -284,7 +284,7 @@ def pending() -> int:
         return len(_store)
 
 
-# Résout la preuve de travail (le calcul que fait le navigateur ; ici en Python pour les tests).
+# Resout la preuve de travail (le calcul que fait le navigateur ; ici en Python pour les tests).
 def solve_pow(challenge: str, bits: int) -> int:
     n = 0
     while not pow_ok(challenge, n, bits):
@@ -292,7 +292,7 @@ def solve_pow(challenge: str, bits: int) -> int:
     return n
 
 
-# RÉSERVÉ AUX TESTS : la réponse d'un captcha en attente (jamais exposée par l'API).
+# RESERVE AUX TESTS : la reponse d'un captcha en attente (jamais exposee par l'API).
 def _answer_for_tests(cid: str) -> Optional[Dict[str, Any]]:
     with _lock:
         ch = _store.get(cid)

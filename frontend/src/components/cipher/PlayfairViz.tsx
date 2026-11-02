@@ -5,7 +5,7 @@ interface Props {
   trace: PlayfairTrace
   index: number
   original: string
-  showResult?: boolean // sous chaque paire, son résultat (partie Échange)
+  showResult?: boolean // sous chaque paire, son resultat (partie Echange)
 }
 
 const RULE_LABEL: Record<string, string> = {

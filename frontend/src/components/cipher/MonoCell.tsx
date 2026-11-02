@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { t } from '../../i18n'
 
-// Cellule de tableau en police mono : le texte est coupé par « … » quand il est trop long ;
-// un clic (ou Entrée) l'affiche en entier, un second clic le replie.
+// Cellule de tableau en police mono : le texte est coupe par « … » quand il est trop long ;
+// un clic (ou Entree) l'affiche en entier, un second clic le replie.
 export default function MonoCell({ text, className = '' }: { text: string; className?: string }) {
   const ref = useRef<HTMLTableCellElement>(null)
   const [open, setOpen] = useState(false)
-  const [cut, setCut] = useState(false)   // le texte est-il coupé quand la cellule est repliée ?
+  const [cut, setCut] = useState(false)   // le texte est-il coupe quand la cellule est repliee ?
 
   useLayoutEffect(() => {
     const el = ref.current
@@ -19,7 +19,7 @@ export default function MonoCell({ text, className = '' }: { text: string; class
 
   const expandable = cut || open
   const toggle = () => {
-    if (window.getSelection()?.toString()) return   // l'utilisateur sélectionne du texte : on ne replie pas
+    if (window.getSelection()?.toString()) return   // l'utilisateur selectionne du texte : on ne replie pas
     setOpen((o) => !o)
   }
   return (

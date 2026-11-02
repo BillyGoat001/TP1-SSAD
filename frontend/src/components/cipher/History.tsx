@@ -2,7 +2,7 @@ import type { HistoryEntry } from '../../types'
 import MonoCell from './MonoCell'
 import { t, locale } from '../../i18n'
 
-// 3 µs (entier, sans virgule) · 1,2 ms · 1,5 s (virgule décimale en français, point en anglais)
+// 3 µs (entier, sans virgule) · 1,2 ms · 1,5 s (virgule decimale en francais, point en anglais)
 export function fmtTime(us: number): string {
   const whole = Math.max(1, Math.round(us))
   if (whole < 1000) return `${whole} µs`
@@ -11,7 +11,7 @@ export function fmtTime(us: number): string {
   return `${(ms / 1000).toLocaleString(locale(), { maximumFractionDigits: 2 })} s`
 }
 
-// Section dépliante « Historique » : une ligne par opération, la plus récente en haut.
+// Section depliante « Historique » : une ligne par operation, la plus recente en haut.
 export default function History({ entries, onRemove, onClear }: {
   entries: HistoryEntry[]
   onRemove: (id: number) => void   // supprime UNE ligne

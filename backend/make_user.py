@@ -20,10 +20,10 @@ import auth
 import db
 
 
-# Point d'entrée CLI : aiguille selon les drapeaux (--list, --delete, --unlock)
-# ou, par défaut, demande deux fois le mot de passe et enregistre le compte.
-# Renvoie le code de sortie du processus (0 = succès). Le docstring du module
-# ci-dessus sert de texte d'aide, il est affiché quand aucun nom n'est donné.
+# Point d'entree CLI : aiguille selon les drapeaux (--list, --delete, --unlock)
+# ou, par defaut, demande deux fois le mot de passe et enregistre le compte.
+# Renvoie le code de sortie du processus (0 = succes). Le docstring du module
+# ci-dessus sert de texte d'aide, il est affiche quand aucun nom n'est donne.
 def main(argv: list) -> int:
     args = [a for a in argv if not a.startswith("--")]
     flags = {a for a in argv if a.startswith("--")}

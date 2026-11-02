@@ -1,12 +1,12 @@
-// Section dépliante « Limites et Failles ».
+// Section depliante « Limites et Failles ».
 //
-// Définitions (celles de la prof) :
-//   FAILLE = un cas où l'algorithme ne chiffre pas, ou ne permet pas de retrouver le message d'origine.
-//   LIMITE = un cas où le message est bien chiffré, mais où le résultat se reconnaît ou se casse très facilement.
+// Definitions (celles de la prof) :
+//   FAILLE = un cas ou l'algorithme ne chiffre pas, ou ne permet pas de retrouver le message d'origine.
+//   LIMITE = un cas ou le message est bien chiffre, mais ou le resultat se reconnait ou se casse tres facilement.
 //
-// Tout est listé, y compris ce que notre appli contourne (champ `fix`, affiché à part).
-// Les exemples et les chiffres cités ont été vérifiés en lançant le code de l'application.
-// Les textes sont écrits en français ; t() les traduit à l'affichage (anglais : i18n/en/limits.ts).
+// Tout est liste, y compris ce que notre appli contourne (champ `fix`, affiche a part).
+// Les exemples et les chiffres cites ont ete verifies en lancant le code de l'application.
+// Les textes sont ecrits en francais ; t() les traduit a l'affichage (anglais : i18n/en/limits.ts).
 
 import { t } from '../../i18n'
 
@@ -14,7 +14,7 @@ interface Point {
   t: string       // titre court
   d: string       // explication
   ex?: string     // exemple (police fixe)
-  fix?: string    // ce que fait notre appli, si elle contourne le problème
+  fix?: string    // ce que fait notre appli, si elle contourne le probleme
 }
 
 interface AlgoSheet {

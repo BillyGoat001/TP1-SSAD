@@ -1,4 +1,4 @@
-// Partie « Échange entre deux personnes » (ExchangePanel, parts, Chat)
+// Partie « Echange entre deux personnes » (ExchangePanel, parts, Chat)
 const exchange: Record<string, string> = {
   'Utilisateur {u}': 'User {u}',
   'Messagerie de {u}': "{u}'s messaging",

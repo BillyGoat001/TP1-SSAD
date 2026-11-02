@@ -4,9 +4,9 @@ import { t } from '../../i18n'
 
 interface Props {
   matrix: number[][]
-  /** Cases de départ en texte (prioritaires sur `matrix`) : permet de partir de cases vides. */
+  /** Cases de depart en texte (prioritaires sur `matrix`) : permet de partir de cases vides. */
   cells?: string[][]
-  /** Les cases grandissent avec le nombre mais la grille ne dépasse jamais son conteneur. */
+  /** Les cases grandissent avec le nombre mais la grille ne depasse jamais son conteneur. */
   fit?: boolean
   onChange: (numbers: number[][], valid: boolean, cells: string[][]) => void
 }
@@ -66,7 +66,7 @@ export default function HillMatrixInput({ matrix, cells: initialCells, fit = fal
 
   const maxLen = Math.max(1, ...cells.flat().map((s) => s.length))
   const natural = `calc(${maxLen}ch + 1.6rem)`
-  // en mode « fit », la case s'arrête de grandir quand la grille atteint le bord du conteneur
+  // en mode « fit », la case s'arrete de grandir quand la grille atteint le bord du conteneur
   const cellWidth = fit ? `min(${natural}, calc((100cqw - ${(n - 1) * GAP}px) / ${n}))` : natural
 
   return (

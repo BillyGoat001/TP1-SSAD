@@ -36,14 +36,14 @@ PUBLIC_EXPONENT = 65537
 KEY_SIZES = (32, 64, 128, 256, 512, 1024, 2048)
 DEFAULT_BITS = 1024
 
-# Petits nombres premiers : un premier filtre très rapide avant Miller-Rabin.
+# Petits nombres premiers : un premier filtre tres rapide avant Miller-Rabin.
 _SMALL_PRIMES = [p for p in range(3, 2000, 2)
                  if all(p % k for k in range(3, int(p ** 0.5) + 1, 2))]
 
 
-# Test de primalité de Miller-Rabin : faux pour un composé, vrai pour un premier
-# (erreur possible <= 4^-rounds, négligeable avec 40 témoins). Un filtre par les
-# petits premiers élimine d'abord la plupart des composés sans calcul coûteux.
+# Test de primalite de Miller-Rabin : faux pour un compose, vrai pour un premier
+# (erreur possible <= 4^-rounds, negligeable avec 40 temoins). Un filtre par les
+# petits premiers elimine d'abord la plupart des composes sans calcul couteux.
 def is_probable_prime(n, rounds=40):
     if n < 2:
         return False
@@ -62,7 +62,7 @@ def is_probable_prime(n, rounds=40):
         d //= 2
         s += 1
     for _ in range(rounds):
-        a = secrets.randbelow(n - 3) + 2          # témoin aléatoire dans [2, n − 2]
+        a = secrets.randbelow(n - 3) + 2          # temoin aleatoire dans [2, n − 2]
         x = pow(a, d, n)
         if x == 1 or x == n - 1:
             continue
@@ -71,12 +71,12 @@ def is_probable_prime(n, rounds=40):
             if x == n - 1:
                 break
         else:
-            return False                           # a prouve que n est composé
+            return False                           # a prouve que n est compose
     return True
 
 
-# Nombre premier aléatoire d'exactement `bits` bits. Les deux bits de poids fort
-# sont forcés à 1 pour que le produit n = p·q ait pile 2×bits bits.
+# Nombre premier aleatoire d'exactement `bits` bits. Les deux bits de poids fort
+# sont forces a 1 pour que le produit n = p·q ait pile 2×bits bits.
 def random_prime(bits):
     top = (1 << (bits - 1)) | (1 << (bits - 2))
     while True:
@@ -85,7 +85,7 @@ def random_prime(bits):
             return candidate
 
 
-# Algorithme d'Euclide étendu : renvoie (g, x, y) avec a·x + b·y = g = pgcd(a, b).
+# Algorithme d'Euclide etendu : renvoie (g, x, y) avec a·x + b·y = g = pgcd(a, b).
 def egcd(a, b):
     x0, y0, x1, y1 = 1, 0, 0, 1
     while b:
@@ -103,8 +103,8 @@ def mod_inverse(a, m):
     return x % m
 
 
-# Génère une paire de clés RSA de `bits` bits. Renvoie tous les nombres (p, q, φ
-# et d restent secrets : seuls e et n sont publics). Rejette un tirage où e n'est
+# Genere une paire de cles RSA de `bits` bits. Renvoie tous les nombres (p, q, φ
+# et d restent secrets : seuls e et n sont publics). Rejette un tirage ou e n'est
 # pas premier avec φ(n).
 def generate_keypair(bits=DEFAULT_BITS):
     if bits not in KEY_SIZES:
@@ -130,12 +130,12 @@ def generate_keypair(bits=DEFAULT_BITS):
     }
 
 
-# Octets par bloc : assez peu pour que chaque bloc m vérifie m < n.
+# Octets par bloc : assez peu pour que chaque bloc m verifie m < n.
 def block_size(n):
     return (n.bit_length() - 1) // 8
 
 
-# Chiffre un texte avec la clé publique (e, n) : c = m^e mod n pour chaque bloc.
+# Chiffre un texte avec la cle publique (e, n) : c = m^e mod n pour chaque bloc.
 def encrypt_text(text, e, n):
     data = text.encode("utf-8")
     k = block_size(n)
@@ -149,8 +149,8 @@ def encrypt_text(text, e, n):
     return {"blockBytes": k, "blocks": blocks}
 
 
-# Déchiffre avec la clé privée (d, n) : m = c^d mod n pour chaque bloc, puis
-# rassemble les octets en texte (erreur si ce n'est pas la bonne clé privée).
+# Dechiffre avec la cle privee (d, n) : m = c^d mod n pour chaque bloc, puis
+# rassemble les octets en texte (erreur si ce n'est pas la bonne cle privee).
 def decrypt_blocks(cipher_blocks, d, n):
     blocks, data = [], b""
     for c in cipher_blocks:
@@ -167,9 +167,9 @@ def decrypt_blocks(cipher_blocks, d, n):
     return {"blocks": blocks, "text": text}
 
 
-# Écrit l'algo et sa clé sous forme de texte compact, prêt à être chiffré par RSA.
-# Pour Hill, vérifie que la matrice est inversible mod 26 (sinon B ne pourrait pas
-# déchiffrer).
+# Ecrit l'algo et sa cle sous forme de texte compact, pret a etre chiffre par RSA.
+# Pour Hill, verifie que la matrice est inversible mod 26 (sinon B ne pourrait pas
+# dechiffrer).
 def params_to_text(algo, shift=None, direction="right", key=None, matrix=None):
     if algo == "caesar":
         if shift is None or shift < 0:
@@ -194,7 +194,7 @@ def params_to_text(algo, shift=None, direction="right", key=None, matrix=None):
 
 
 # Relit le mode d'emploi sorti du coffre : {algo, shift/direction | key | matrix}.
-# Lève une erreur si le texte est illisible (mauvaise clé privée).
+# Leve une erreur si le texte est illisible (mauvaise cle privee).
 def text_to_params(text):
     try:
         parts = text.split("|")
@@ -212,7 +212,7 @@ def text_to_params(text):
     raise ValueError("Mode d'emploi illisible : le coffre n'a pas été ouvert avec la bonne clé privée.")
 
 
-# Convertit en entier un grand nombre reçu en texte (JSON ne garde pas leur précision).
+# Convertit en entier un grand nombre recu en texte (JSON ne garde pas leur precision).
 def parse_int(value, name):
     value = str(value).strip()
     if not value.isdigit():

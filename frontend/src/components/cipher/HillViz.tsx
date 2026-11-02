@@ -6,10 +6,10 @@ interface Props {
   trace: HillTrace
   index: number
   original: string
-  showResult?: boolean // sous chaque bloc, son résultat (partie Échange)
+  showResult?: boolean // sous chaque bloc, son resultat (partie Echange)
 }
 
-/** Un très grand nombre s'affiche abrégé (12345…67890) ; la valeur exacte reste dans l'info-bulle. */
+/** Un tres grand nombre s'affiche abrege (12345…67890) ; la valeur exacte reste dans l'info-bulle. */
 function Num({ v, className }: { v: number | string; className?: string }) {
   const s = String(v)
   const cut = s.length > 13

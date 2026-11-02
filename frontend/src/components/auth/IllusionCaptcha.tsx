@@ -1,10 +1,10 @@
-// Captcha « illusion de contour » : quatre caractères dessinés par des rayures.
+// Captcha « illusion de contour » : quatre caracteres dessines par des rayures.
 //
-// Dans les caractères, les rayures sont décalées d'une demi-période (et un peu penchées).
-// La couleur moyenne est la même partout : réduite ou floutée, l'image n'est qu'un aplat.
-// À taille réelle, l'œil humain voit une rupture le long du contour des lettres et la
-// complète, comme dans l'illusion du contour de Kanizsa. L'image est affichée à sa taille
-// exacte, sans lissage : l'agrandir ou la réduire ferait disparaître l'effet.
+// Dans les caracteres, les rayures sont decalees d'une demi-periode (et un peu penchees).
+// La couleur moyenne est la meme partout : reduite ou floutee, l'image n'est qu'un aplat.
+// A taille reelle, l'oeil humain voit une rupture le long du contour des lettres et la
+// complete, comme dans l'illusion du contour de Kanizsa. L'image est affichee a sa taille
+// exacte, sans lissage : l'agrandir ou la reduire ferait disparaitre l'effet.
 import type { Challenge } from '../../types'
 
 export default function IllusionCaptcha({ ch }: { ch: Challenge }) {

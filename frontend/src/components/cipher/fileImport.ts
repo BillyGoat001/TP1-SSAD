@@ -1,28 +1,28 @@
 // Import d'UN fichier texte (.txt, .md, .key… : l'extension n'a aucune importance,
-// seul le CONTENU compte) et vérification de ce contenu :
-//   - est-ce une clé valable pour l'algorithme choisi (César / Playfair / Hill) ?
+// seul le CONTENU compte) et verification de ce contenu :
+//   - est-ce une cle valable pour l'algorithme choisi (Cesar / Playfair / Hill) ?
 //   - est-ce un message valable ?
-// Rien n'est modifié à l'écran tant que le contenu n'est pas jugé valable : sinon on renvoie
-// un « problème » avec la liste de ce qui ne va pas (et, pour Hill, le format accepté).
-// Les messages sont écrits dans la langue choisie au moment de l'import (voir i18n).
+// Rien n'est modifie a l'ecran tant que le contenu n'est pas juge valable : sinon on renvoie
+// un « probleme » avec la liste de ce qui ne va pas (et, pour Hill, le format accepte).
+// Les messages sont ecrits dans la langue choisie au moment de l'import (voir i18n).
 
 import { t, _t, getLang, num, plural as pl } from '../../i18n'
 
 export interface Problem {
   /** Ce qui ne va pas, une raison par ligne. */
   reasons: string[]
-  /** Le contenu lu, avec les espaces rendus visibles (aide à repérer l'invisible). */
+  /** Le contenu lu, avec les espaces rendus visibles (aide a reperer l'invisible). */
   seen?: string
-  /** Format accepté, à afficher tel quel (police fixe). */
+  /** Format accepte, a afficher tel quel (police fixe). */
   format?: { text: string; example: string }
 }
 
 export type Checked<T> = { ok: true; value: T; info: string } | { ok: false; problem: Problem }
 
-export const MAX_FILE_BYTES = 200 * 1024   // au-delà ce n'est plus une clé ni un message de TP
-export const MAX_SHIFT_DIGITS = 200        // même borne que le backend
+export const MAX_FILE_BYTES = 200 * 1024   // au-dela ce n'est plus une cle ni un message de TP
+export const MAX_SHIFT_DIGITS = 200        // meme borne que le backend
 export const MAX_KEY_LETTERS = 200
-export const MAX_MESSAGE_CHARS = 4000      // l'historique et la conversation acceptent 5000 caractères
+export const MAX_MESSAGE_CHARS = 4000      // l'historique et la conversation acceptent 5000 caracteres
 export const HILL_MIN = 2
 export const HILL_MAX = 5
 
@@ -42,7 +42,7 @@ function visible(s: string): string {
   return one.length > 60 ? one.slice(0, 60) + '…' : one
 }
 
-// Au plus 5 caractères distincts, entre guillemets (français « x », anglais "x").
+// Au plus 5 caracteres distincts, entre guillemets (francais « x », anglais "x").
 const q = (c: string) => (getLang() === 'en' ? `"${c}"` : `« ${c} »`)
 function quote(chars: string[]): string {
   const uniq = [...new Set(chars)]
@@ -50,13 +50,13 @@ function quote(chars: string[]): string {
   return uniq.length > 5 ? `${shown}…` : shown
 }
 
-// « 3 lignes » : le nombre puis le mot, accordé et traduit
+// « 3 lignes » : le nombre puis le mot, accorde et traduit
 const plural = (n: number, one: string, many: string) => `${num(n)} ${t(pl(n, one, many))}`
 
 // ------------------------------------------------------------ lecture -------
 
 /** Texte d'un fichier lu en octets : UTF-8 (avec ou sans BOM) ou UTF-16 avec BOM
- *  (le « Unicode » du Bloc-notes). Un fichier binaire est refusé. Fins de ligne → \n. */
+ *  (le « Unicode » du Bloc-notes). Un fichier binaire est refuse. Fins de ligne → \n. */
 export function decodeText(buf: ArrayBuffer): Checked<string> {
   const b = new Uint8Array(buf)
   let label = 'utf-8'
@@ -88,11 +88,11 @@ export async function readTextFile(file: File): Promise<Checked<string>> {
   return decodeText(buf)
 }
 
-// ------------------------------------------------------------ César ---------
+// ------------------------------------------------------------ Cesar ---------
 
-/** Décalage : uniquement des chiffres (nombre positif, sans signe, sans espace, sans lettre). */
+/** Decalage : uniquement des chiffres (nombre positif, sans signe, sans espace, sans lettre). */
 export function checkCaesarKey(raw: string): Checked<string> {
-  const text = raw.replace(/\n+$/, '')                  // un retour à la ligne final est toléré
+  const text = raw.replace(/\n+$/, '')                  // un retour a la ligne final est tolere
   if (text.trim() === '') return fail([t('Le fichier est vide : il doit contenir le décalage, par exemple 3.')])
 
   const reasons: string[] = []
@@ -119,7 +119,7 @@ export function checkCaesarKey(raw: string): Checked<string> {
 
 // ------------------------------------------------------------ Playfair ------
 
-/** Mot-clé : des lettres A–Z (majuscules ou minuscules), espaces autorisés entre les mots. */
+/** Mot-cle : des lettres A–Z (majuscules ou minuscules), espaces autorises entre les mots. */
 export function checkPlayfairKey(raw: string): Checked<string> {
   const text = raw.replace(/\n+$/, '')
   if (text.trim() === '') return fail([t('Le fichier est vide : il doit contenir le mot-clé, par exemple PLAYFAIR.')])
@@ -142,17 +142,17 @@ export function checkPlayfairKey(raw: string): Checked<string> {
 
 // ------------------------------------------------------------ Hill ----------
 
-/** Matrice écrite dans un fichier texte : une ligne par rangée, nombres séparés par des
- *  espaces (virgule, point-virgule ou tabulation acceptés). Carrée, de 2×2 à 5×5. */
+/** Matrice ecrite dans un fichier texte : une ligne par rangee, nombres separes par des
+ *  espaces (virgule, point-virgule ou tabulation acceptes). Carree, de 2×2 a 5×5. */
 export function checkHillKey(raw: string): Checked<string[][]> {
   const fmt = { format: HILL_FORMAT }
-  const lines = raw.split('\n').map((l) => l.trim()).filter((l) => l !== '')   // lignes vides ignorées
+  const lines = raw.split('\n').map((l) => l.trim()).filter((l) => l !== '')   // lignes vides ignorees
   if (lines.length === 0) return fail([t('Le fichier est vide : il doit contenir la matrice.')], fmt)
 
   const rows = lines.map((l) => l.split(/[\s,;]+/).filter((t) => t !== ''))
   const reasons: string[] = []
 
-  // 1. chaque élément doit être un entier
+  // 1. chaque element doit etre un entier
   const bad: string[] = []
   rows.forEach((row, r) => row.forEach((tok, c) => {
     if (!/^-?\d+$/.test(tok) && bad.length < 40) bad.push(t('{tok} (ligne {r}, valeur {c})', { tok: q(tok), r: r + 1, c: c + 1 }))
@@ -171,7 +171,7 @@ export function checkHillKey(raw: string): Checked<string[][]> {
     }
   }))
 
-  // 2. la forme : carrée, de 2×2 à 5×5
+  // 2. la forme : carree, de 2×2 a 5×5
   const n = rows.length
   const widths = rows.map((r) => r.length)
   if (n === 1 && widths[0] > 1) {
@@ -193,14 +193,14 @@ export function checkHillKey(raw: string): Checked<string[][]> {
 
 // ------------------------------------------------------------ Message -------
 
-/** Même nettoyage que la saisie au clavier : accents retirés ; majuscules, sauf pour un message clair (keepCase). */
+/** Meme nettoyage que la saisie au clavier : accents retires ; majuscules, sauf pour un message clair (keepCase). */
 const clean = (s: string, keepCase = false) => {
   const t = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   return keepCase ? t : t.toUpperCase()
 }
 
-/** Message : du texte (lettres, espaces, ponctuation, chiffres, retours à la ligne) avec au
- *  moins une lettre. Les lettres hors de l'alphabet A–Z (Æ, Ø, 你, Ж…) sont refusées. */
+/** Message : du texte (lettres, espaces, ponctuation, chiffres, retours a la ligne) avec au
+ *  moins une lettre. Les lettres hors de l'alphabet A–Z (AE, Ø, 你, Ж…) sont refusees. */
 export function checkMessage(raw: string, keepCase = false): Checked<string> {
   const text = raw.replace(/\n+$/, '')
   if (text.trim() === '') return fail([t('Le fichier est vide : il doit contenir un message.')])

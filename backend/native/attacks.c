@@ -1,26 +1,15 @@
-/* Boucles d'attaque RÉELLES, en C : bien plus rapides que l'équivalent Python,
- * tout en restant interruptibles (stop_flag) et en publiant une progression
- * (*pos) relue en direct par un thread Python pendant que la fonction tourne
- * (ctypes relâche le GIL pendant l'appel C : un thread Python peut lire *pos
- * et écrire *stop_flag pendant ce temps).
- *
- * passwords.py / attacks.py gardent toute la logique « métier » (politique,
- * mise en forme, choix des fichiers du dictionnaire) ; ce fichier ne fait QUE
- * la boucle de comparaison, compilée.
- */
-
 #include <string.h>
 
 /* ---------------------------------------------------------------- force brute --
- * Parcourt charset^length dans l'ordre lexicographique (odomètre : le dernier
- * caractère tourne le plus vite), jusqu'à tomber sur `target` ou épuiser
- * l'espace / la limite de tentatives / être interrompue.
+ * Parcourt charset^length dans l'ordre lexicographique (odometre : le dernier
+ * caractere tourne le plus vite), jusqu'a tomber sur `target` ou epuiser
+ * l'espace / la limite de tentatives / etre interrompue.
  *
- * Retour : 1 = trouvée (rang 1-based écrit dans *out_rank) ;
- *          0 = espace épuisé ou limite atteinte ;
+ * Retour : 1 = trouee (rang 1-based ecrit dans *out_rank) ;
+ *          0 = espace epuise ou limite atteinte ;
  *         -1 = interrompue par *stop_flag.
- * *pos = essais réellement effectués (mis à jour tous les `report_every`,
- * et à la sortie, quelle qu'elle soit). */
+ * *pos = essais reellement effectues (mis a jour tous les `report_every`,
+ * et a la sortie, quelle qu'elle soit). */
 int brute_search(const char *charset, int charset_len, int length,
                   const char *target, int target_len,
                   long long limit, long long report_every,
@@ -50,7 +39,7 @@ int brute_search(const char *charset, int charset_len, int length,
         }
         if (limit > 0 && attempts >= limit) { *pos = attempts; return 0; }
 
-        /* incrémente l'odomètre */
+        /* incremente l'odometre */
         int i = length - 1;
         while (i >= 0) {
             idx[i]++;
@@ -58,20 +47,20 @@ int brute_search(const char *charset, int charset_len, int length,
             idx[i] = 0;
             i--;
         }
-        if (i < 0) { *pos = attempts; return 0; }   /* espace épuisé */
+        if (i < 0) { *pos = attempts; return 0; }   /* espace epuise */
     }
 }
 
 /* ------------------------------------------------------------ dictionnaire --
- * Parcourt un buffer de mots séparés par '\n' (un fichier du dictionnaire,
- * déjà décompressé côté Python) à la recherche de `target`.
+ * Parcourt un buffer de mots separes par '\n' (un fichier du dictionnaire,
+ * deja decompresse cote Python) a la recherche de `target`.
  *
- * `base` : nombre de mots déjà parcourus dans les fichiers précédents — permet
- * à *pos de rester une progression continue d'un fichier à l'autre, sans que
- * Python ait à tout recharger en mémoire d'un coup.
+ * `base` : nombre de mots deja parcourus dans les fichiers precedents — permet
+ * a *pos de rester une progression continue d'un fichier a l'autre, sans que
+ * Python ait a tout recharger en memoire d'un coup.
  *
- * Retour : 1 = trouvée (position 1-based DANS CE BUFFER dans *out_rank) ;
- *          0 = buffer épuisé ou limite atteinte ; -1 = interrompue.
+ * Retour : 1 = trouvee (position 1-based DANS CE BUFFER dans *out_rank) ;
+ *          0 = buffer epuise ou limite atteinte ; -1 = interrompue.
  * *pos = base + mots parcourus dans ce buffer. */
 int dict_search_buffer(const char *buf, long long buf_len,
                         const char *target, int target_len,

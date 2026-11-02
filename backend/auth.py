@@ -44,21 +44,21 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9._@-]{1,40}$")
 
 _lock = threading.RLock()
 _SECRET = (os.environ.get("SECRET_KEY") or "").encode() or secrets.token_bytes(32)
-_revoked: Dict[str, float] = {}          # signatures de sessions fermées → expiration
+_revoked: Dict[str, float] = {}          # signatures de sessions fermees → expiration
 
 
-# ----------------------------------------------- mots de passe (chiffrés) ----
-# Règle du TP : aucune fonction de hachage pour les mots de passe, seulement les trois
-# chiffrements codés dans encryption.py. À chaque inscription, le serveur tire AU HASARD
-# l'un des trois (César, Playfair ou Hill) et une clé, chiffre le mot de passe, puis range
-# dans la base : le mot de passe chiffré, l'algorithme et sa clé (voir db.py).
+# ----------------------------------------------- mots de passe (chiffres) ----
+# Regle du TP : aucune fonction de hachage pour les mots de passe, seulement les trois
+# chiffrements codes dans encryption.py. A chaque inscription, le serveur tire AU HASARD
+# l'un des trois (Cesar, Playfair ou Hill) et une cle, chiffre le mot de passe, puis range
+# dans la base : le mot de passe chiffre, l'algorithme et sa cle (voir db.py).
 #
-# Limite assumée : un chiffrement se défait avec sa clé, et la clé est rangée à côté du
+# Limite assumee : un chiffrement se defait avec sa cle, et la cle est rangee a cote du
 # secret. Quiconque lit la base peut donc retrouver les mots de passe (un hachage, lui,
-# ne se défait pas). De plus, comme les algorithmes ne traitent que les lettres, les
-# chiffres et les symboles ne sont pas chiffrés : ils restent dans le « layout ».
+# ne se defait pas). De plus, comme les algorithmes ne traitent que les lettres, les
+# chiffres et les symboles ne sont pas chiffres : ils restent dans le « layout ».
 METHODS = ("caesar", "playfair", "hill")
-MAX_ATTEMPTS = 4                         # mots de passe erronés de suite avant le blocage du compte
+MAX_ATTEMPTS = 4                         # mots de passe errones de suite avant le blocage du compte
 PASSWORD_MIN = 8
 PASSWORD_MAX = 64
 _PLAYFAIR_LETTERS = "ABCDEFGHIKLMNOPQRSTUVWXYZ"
@@ -83,7 +83,7 @@ def random_key(method: str) -> Dict[str, Any]:
     n = 2 + secrets.randbelow(2)                                    # matrice 2×2 ou 3×3
     while True:
         m = [[secrets.randbelow(26) for _ in range(n)] for _ in range(n)]
-        if en.hill_weak_key(m) is None:                            # inversible mod 26, ni identité, ni diagonale…
+        if en.hill_weak_key(m) is None:                            # inversible mod 26, ni identite, ni diagonale…
             return {"matrix": m}
 
 
@@ -142,7 +142,7 @@ def verify_password(password: str, record: Dict[str, Any]) -> bool:
     """Chiffre le mot de passe proposé avec l'algorithme et la clé du compte, et compare au
     secret rangé (comparaison à temps constant)."""
     try:
-        if not password.isascii():                       # les accents ne sont pas gérés par Playfair/Hill
+        if not password.isascii():                       # les accents ne sont pas geres par Playfair/Hill
             return False
         mine = encipher(password, record["method"], record["key"])
     except (ValueError, KeyError, TypeError):
@@ -150,8 +150,8 @@ def verify_password(password: str, record: Dict[str, Any]) -> bool:
     return hmac.compare_digest(_fingerprint(mine), _fingerprint(record))
 
 
-# Faux compte : si le nom n'existe pas, on chiffre et on compare quand même, pour que la
-# réponse prenne le même temps (sinon le délai révélerait quels noms existent).
+# Faux compte : si le nom n'existe pas, on chiffre et on compare quand meme, pour que la
+# reponse prenne le meme temps (sinon le delai revelerait quels noms existent).
 _DUMMY = encipher("x", "caesar", {"shift": 3})
 
 
@@ -214,14 +214,14 @@ def set_password(username: str, password: str) -> bool:
     return True
 
 
-# Blocage PAR COUPLE (compte, IP) : 4 échecs de suite depuis une IP bloquent cette IP sur
-# CE compte, pas le compte entier — une autre IP (ex. le vrai propriétaire, chez lui)
-# peut toujours essayer. Nombre fixe, pas d'attente progressive : à 4 échecs, bloqué
-# jusqu'à déblocage admin (make_user.py --unlock). Limite assumée : un attaquant qui
-# change d'IP repart à zéro sur ce compteur.
+# Blocage PAR COUPLE (compte, IP) : 4 echecs de suite depuis une IP bloquent cette IP sur
+# CE compte, pas le compte entier — une autre IP (ex. le vrai proprietaire, chez lui)
+# peut toujours essayer. Nombre fixe, pas d'attente progressive : a 4 echecs, bloque
+# jusqu'a deblocage admin (make_user.py --unlock). Limite assumee : un attaquant qui
+# change d'IP repart a zero sur ce compteur.
 #
-# Noms inconnus : on compte aussi leurs échecs (en mémoire, par IP), pour que la réponse
-# soit la même que pour un vrai compte et ne révèle pas si le nom existe.
+# Noms inconnus : on compte aussi leurs echecs (en memoire, par IP), pour que la reponse
+# soit la meme que pour un vrai compte et ne revele pas si le nom existe.
 _unknown: Dict[str, int] = {}
 
 
@@ -257,7 +257,7 @@ def attempt_login(username: str, password: str, ip: str) -> Tuple[Optional[str],
             key = _unk_key(ip, username)
             _unknown[key] = _unknown.get(key, 0) + 1
             fails = _unknown[key]
-            if len(_unknown) > 5000:                    # garde-fou mémoire
+            if len(_unknown) > 5000:                    # garde-fou memoire
                 for k in list(_unknown)[:1000]:
                     _unknown.pop(k, None)
     return None, max(0, MAX_ATTEMPTS - fails)
@@ -319,11 +319,11 @@ def revoke_token(token: Optional[str]) -> None:
 
 
 # ---------------------------------------------- limitation des tentatives ----
-# Pas d'attente progressive ni de compte à rebours : le seul blocage qui existe
-# est le blocage fixe par couple (compte, IP) ci-dessus (4 échecs -> bloqué
-# jusqu'à déblocage admin, voir is_blocked / attempt_login). Ce compteur-ci ne
-# sert plus qu'à faire monter légèrement la difficulté du CAPTCHA après des
-# échecs récents depuis une IP (voir recent_failures, appelé par /api/auth/captcha).
+# Pas d'attente progressive ni de compte a rebours : le seul blocage qui existe
+# est le blocage fixe par couple (compte, IP) ci-dessus (4 echecs -> bloque
+# jusqu'a deblocage admin, voir is_blocked / attempt_login). Ce compteur-ci ne
+# sert plus qu'a faire monter legerement la difficulte du CAPTCHA apres des
+# echecs recents depuis une IP (voir recent_failures, appele par /api/auth/captcha).
 _fails: Dict[str, List[float]] = {}
 FAIL_WINDOW = 600
 
@@ -348,7 +348,7 @@ def record_failure(key: str, now: Optional[float] = None) -> None:
     with _lock:
         _recent(key, now)
         _fails.setdefault(key, []).append(now)
-        if len(_fails) > 5000:                          # garde-fou mémoire
+        if len(_fails) > 5000:                          # garde-fou memoire
             for k in list(_fails)[:1000]:
                 _fails.pop(k, None)
 

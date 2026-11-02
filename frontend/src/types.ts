@@ -192,6 +192,31 @@ export interface DictResult {
   limit: number | null
 }
 
+// Attaque en tâche de fond (force brute « complexe » + dictionnaire) : le serveur
+// boucle pour de vrai, la progression est relue par polling (attackProgress).
+export interface AttackStartInput {
+  kind: 'brute' | 'dict'
+  caseId?: string
+  target: string
+  length?: number
+  limit?: number | null
+  rules?: Rules | null
+  knowComposition?: boolean
+  lang?: 'fr' | 'en'          // ordre de lecture du dictionnaire (langue de l'interface en tête)
+}
+
+export interface AttackSnapshot {
+  ok: boolean
+  error?: string
+  id: string
+  pos: number                 // essais / mots RÉELLEMENT parcourus jusqu'ici
+  total: number                // taille de l'espace / du dictionnaire
+  done: boolean
+  elapsed: number               // secondes RÉELLES écoulées depuis le départ
+  rate: number                   // essais/s RÉELS observés (pos ÷ elapsed)
+  result: (Omit<BruteResult, 'ok' | 'error'> | Omit<DictResult, 'ok'>) | null
+}
+
 export interface SpeedTable {
   columns: { name: string; detail: string; size: number }[]
   rows: { length: number; cells: { human: string; strength: Strength }[] }[]
@@ -236,6 +261,39 @@ export interface IntegrityDemo {
   recomputed: string
   tampered: boolean
   valid: boolean
+}
+
+// ---- canal A -> B réel (voir backend/integrity.py : seal / open_channel) ----
+// Le message est vraiment chiffré (César/Playfair/Hill tirés au hasard, comme
+// pour un mot de passe) ; `record.secret` EST le chiffré — c'est lui que
+// l'attaquant C peut modifier avant que B n'ouvre le canal.
+export interface CipherRecordKey {
+  shift?: number          // César
+  key?: string            // Playfair
+  matrix?: number[][]     // Hill
+}
+export interface CipherRecord {
+  method: Algo | null             // null = le message a voyagé EN CLAIR (chiffrement désactivé)
+  key: CipherRecordKey
+  secret: string                 // ce qui « voyage » — modifiable par C pour simuler une altération
+  layout: [number, string][]
+  fillers: number[]
+  jmap: number[]
+  cases: number[]
+}
+export interface IntegritySealResult {
+  ok: boolean
+  error?: string
+  tag: string             // étiquette HMAC calculée sur le CLAIR, avant chiffrement
+  record: CipherRecord
+}
+export interface IntegrityOpenResult {
+  ok: boolean
+  error?: string
+  decrypted: string | null
+  valid: boolean | null    // null si la protection est désactivée (aucune vérification faite)
+  recomputed: string | null
+  broken: boolean          // déchiffrement impossible (ex. longueur invalide après altération)
 }
 
 // ---- Fichiers de stockage (voir backend/storage.py) ----
@@ -299,10 +357,11 @@ export interface LoginResult {
   ok: boolean
   status: number
   user?: string
-  error?: 'captcha' | 'credentials' | 'locked' | 'setup' | string
+  error?: 'captcha' | 'credentials' | 'locked' | 'blocked' | 'setup' | 'exists' | 'username' | 'policy' | string
   reason?: string
   message?: string
   retry_after?: number
+  remaining?: number            // mots de passe erronés encore permis avant le blocage du compte
 }
 export interface AuthStatus {
   ok: boolean

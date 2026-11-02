@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import type { IntegrityDemo } from '../../types'
+import type { CipherRecord, ExchangeParams, IntegrityOpenResult } from '../../types'
 import { api } from '../../api'
+import { algoName, keyText } from '../exchange/parts'
 import { t, _t } from '../../i18n'
 
 // Partie 4 — Intégrité du message (HMAC-SHA256).
-// A envoie (message, étiquette) à B sur un canal. Le message peut être
-// intercepté et modifié en route par un attaquant C : B recalcule l'étiquette
-// sur ce qu'il a reçu et compare. Une étiquette qui ne correspond plus révèle
-// la modification. Toute l'idée est montrée par une animation sur le canal.
+// A chiffre vraiment son message (César/Playfair/Hill tirés au hasard, comme
+// pour un mot de passe — voir backend/auth.py) et signe le CLAIR avant
+// chiffrement. C'est le CHIFFRÉ qui « voyage » sur le canal, et un attaquant C
+// peut l'intercepter et le modifier en route. Avec la protection activée, B
+// recalcule l'étiquette sur ce qu'il a déchiffré et la compare : toute
+// altération du chiffré fait diverger les étiquettes. Sans protection, B
+// affiche simplement ce qu'il a déchiffré comme « bien reçu », sans aucune
+// vérification — c'est la faille que la page démontre.
 
 type Pt = { x: number; y: number }
 type Dot = { x: number; y: number; color: 'green' | 'red' }
@@ -31,50 +36,65 @@ function dotsAlong(p: Pt, q: Pt, color: 'green' | 'red', step = STEP): Dot[] {
   return out
 }
 
+// (algo, clé) d'un CipherRecord CHIFFRÉ (method non nul), dans la forme
+// attendue par keyText/algoName (les mêmes helpers que la page Échange).
+function asParams(r: CipherRecord): ExchangeParams | null {
+  if (r.method === 'caesar') return { algo: 'caesar', shift: r.key.shift, direction: 'right' }
+  if (r.method === 'playfair') return { algo: 'playfair', key: r.key.key }
+  if (r.method === 'hill') return { algo: 'hill', matrix: r.key.matrix }
+  return null
+}
+
 // Exemples affichés en gris dans les champs vides (comme « ex. 3 » dans les autres pages)
 const EX_KEY = _t('ex. cle-partagee')
 const EX_MSG = _t('ex. Virement de 100 DA vers le compte B')
-const EX_TAMPER = _t('ex. Virement de 900 DA vers le compte E')
 
 export default function IntegrityPanel() {
   const [key, setKey] = useState('')
   const [original, setOriginal] = useState('')
-  const [tampered, setTampered] = useState('')
+  const [tampered, setTampered] = useState('')          // le CHIFFRÉ, tel que C le réécrit
   const [error, setError] = useState<string | null>(null)   // champ vide : message rouge, comme dans les autres pages
+  const [protect, setProtect] = useState(false)
+  const [encrypt, setEncrypt] = useState(false)            // false = le message voyage en clair
+  const [revealed, setRevealed] = useState(false)        // algo + clé tirés au hasard, révélés ou non
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [lit, setLit] = useState<Dot[]>([])      // points déjà allumés (persistants)
   const [base, setBase] = useState<Dot[]>([])    // points à venir (faibles)
-  const [tagA, setTagA] = useState('…')          // étiquette calculée par A
-  const [result, setResult] = useState<IntegrityDemo | null>(null)
+  const [tagA, setTagA] = useState('…')          // étiquette calculée par A (clair), aperçu en direct
+  const [record, setRecord] = useState<CipherRecord | null>(null)   // chiffrement réel de ce message (une fois envoyé)
+  const [sealTag, setSealTag] = useState<string | null>(null)       // étiquette RÉELLEMENT envoyée avec ce record
+  const [openResult, setOpenResult] = useState<IntegrityOpenResult | null>(null)
 
   const timer = useRef<number | undefined>(undefined)
   const phaseRef = useRef<Phase>('idle')
   const intercepted = useRef(false)
   const lastDot = useRef<Pt>(A)
   const tamperRef = useRef(tampered)
+  const recordRef = useRef<CipherRecord | null>(null)
   const cRef = useRef<HTMLTextAreaElement>(null)
   phaseRef.current = phase
   tamperRef.current = tampered
+  recordRef.current = record
 
   const clearTimer = () => {
     if (timer.current) window.clearInterval(timer.current)
     timer.current = undefined
   }
 
-  // Étiquette de A (affichée dès qu'on a une clé + un message), recalculée en direct.
+  // Étiquette de A (aperçu en direct, sur le clair — avant tout envoi réel).
   useEffect(() => {
-    if (!key || !original) { setTagA('…'); return }
+    if (!protect || !key || !original) { setTagA('…'); return }
     const id = window.setTimeout(() => {
       api.integrityDemo(key, original, original)
         .then((d) => setTagA(d.ok ? d.tag : '…'))
         .catch(() => setTagA('…'))
     }, 150)
     return () => window.clearTimeout(id)
-  }, [key, original])
+  }, [key, original, protect])
 
   // Changer la clé / le message de A remet la scène à zéro.
-  // (Modifier le texte réécrit par C ne réinitialise rien : on le tape pendant l'interception.)
+  // (Modifier le chiffré réécrit par C ne réinitialise rien : on le tape pendant l'interception.)
   useEffect(() => {
     resetScene()
     setError(null)
@@ -83,11 +103,12 @@ export default function IntegrityPanel() {
 
   useEffect(() => () => clearTimer(), [])
 
-  // Quand le message arrive chez C, on met le curseur dans son champ pour écrire tout de suite.
+  // Quand le message arrive chez C, on pré-remplit avec le VRAI chiffré intercepté
+  // (C modifie ce qui transite réellement, pas un texte inventé) et on y met le curseur.
   useEffect(() => {
     if (phase === 'atC') {
+      setTampered(recordRef.current?.secret ?? '')
       cRef.current?.focus()
-      cRef.current?.select()
     }
   }, [phase])
 
@@ -97,7 +118,11 @@ export default function IntegrityPanel() {
     lastDot.current = A
     setLit([])
     setBase([])
-    setResult(null)
+    setRecord(null)
+    setSealTag(null)
+    setOpenResult(null)
+    setRevealed(false)
+    setTampered('')
     setPhase('idle')
   }
 
@@ -120,27 +145,39 @@ export default function IntegrityPanel() {
     }, TICK)
   }
 
-  async function finish(received: string) {
+  async function finish(toOpen: CipherRecord) {
     setPhase('done')
     try {
-      const d = await api.integrityDemo(key, original, received)
-      setResult(d)
+      const d = await api.integrityOpen(key, toOpen, protect, sealTag)
+      setOpenResult(d.ok ? d : null)
+      if (!d.ok) setError(_t('Backend injoignable. Lance le serveur Python.'))
     } catch {
-      setResult(null)
+      setOpenResult(null)
+      setError(_t('Backend injoignable. Lance le serveur Python.'))
     }
   }
 
-  function send() {
+  async function send() {
     // mêmes garde-fous que dans les autres pages : un champ vide affiche un message clair
-    if (!key.trim()) { setError(_t('Indique la clé secrète partagée.')); return }
+    if (protect && !key.trim()) { setError(_t('Indique la clé secrète partagée.')); return }
     if (!original.trim()) { setError(_t('Écris le message de A.')); return }
     setError(null)
     resetScene()
     intercepted.current = false
-    setPhase('leg1')
-    runLeg(dotsAlong(A, B, 'green'), () => {
-      if (!intercepted.current) finish(original)   // arrivé intact
-    })
+    try {
+      // A signe le clair, PUIS chiffre (si l'option est activée) avec un algo + une clé tirés au hasard
+      const sealed = await api.integritySeal(key, original, encrypt)
+      if (!sealed.ok) { setError(_t('Backend injoignable. Lance le serveur Python.')); return }
+      setRecord(sealed.record)
+      setSealTag(sealed.tag)
+      recordRef.current = sealed.record
+      setPhase('leg1')
+      runLeg(dotsAlong(A, B, 'green'), () => {
+        if (!intercepted.current) finish(sealed.record)   // arrivé intact
+      })
+    } catch {
+      setError(_t('Backend injoignable. Lance le serveur Python.'))
+    }
   }
 
   function alterer() {
@@ -150,30 +187,35 @@ export default function IntegrityPanel() {
     setBase([])                                     // on abandonne la fin du trajet A→B
     const from = lastDot.current
     setPhase('toC')
-    // le message est tiré vers C, puis on ATTEND : C écrit ce qu'il veut avant de renvoyer
+    // le chiffré est tiré vers C, puis on ATTEND : C écrit ce qu'il veut avant de renvoyer
     runLeg(dotsAlong(from, C, 'green'), () => setPhase('atC'))
   }
 
-  // C a réécrit son message et le transmet à B (segment rouge C→B).
+  // C a réécrit le chiffré et le transmet à B (segment rouge C→B).
   function sendFromC() {
     if (phaseRef.current !== 'atC') return
-    if (!tamperRef.current.trim()) { setError(_t('C doit écrire un message à envoyer à B.')); return }
+    if (!tamperRef.current.trim()) { setError(_t('C doit écrire un chiffré à envoyer à B.')); return }
+    if (!recordRef.current) return
     setError(null)
     setPhase('legCB')
-    runLeg(dotsAlong(C, B, 'red'), () => finish(tamperRef.current))
+    const toOpen: CipherRecord = { ...recordRef.current, secret: tamperRef.current }
+    runLeg(dotsAlong(C, B, 'red'), () => finish(toOpen))
   }
 
   const sending = phase === 'leg1' || phase === 'toC' || phase === 'atC' || phase === 'legCB'
   const showC = intercepted.current && phase !== 'idle'
-  const received = result ? (result.valid ? original : tampered) : original
+  const done = phase === 'done' && openResult
 
   const caption =
-    t(phase === 'idle' ? 'A va envoyer son message signé à B sur le canal.'
-      : phase === 'leg1' ? 'Le message circule sur le canal…'
-      : phase === 'toC' ? 'C intercepte le message !'
-      : phase === 'atC' ? 'C tient le message — réécris-le dans la carte C, puis « Envoyer à B ».'
-      : phase === 'legCB' ? 'Le message modifié repart vers B…'
-      : result && result.valid ? '✓ Arrivé intact : les étiquettes correspondent.'
+    t(phase === 'idle' ? 'A va envoyer son message chiffré et signé à B sur le canal.'
+      : phase === 'leg1' ? 'Le chiffré circule sur le canal…'
+      : phase === 'toC' ? 'C intercepte le chiffré !'
+      : phase === 'atC' ? 'C tient le chiffré — modifie-le dans la carte C, puis « Envoyer à B ».'
+      : phase === 'legCB' ? 'Le chiffré modifié repart vers B…'
+      : !done ? '⚠ B n’a pas pu ouvrir le canal.'
+      : openResult!.broken ? '⚠ B ne peut pas déchiffrer ce qu’il a reçu : le chiffré est devenu invalide.'
+      : !protect ? '✓ B affiche ce qu’il a déchiffré comme « bien reçu » — sans AUCUNE vérification.'
+      : openResult!.valid ? '✓ Arrivé intact : les étiquettes correspondent.'
       : '✗ B détecte l’altération : les étiquettes diffèrent.')
 
   // couleur d'un nœud
@@ -185,15 +227,39 @@ export default function IntegrityPanel() {
       <h2 className="panel-title">{t('Intégrité du message (HMAC-SHA256)')}</h2>
       <div className="intg-fields">
         <div className="field">
-          <span className="field-label">{t('Clé secrète partagée (A et B)')}</span>
-          <input className="text-input" value={key} placeholder={t(EX_KEY)} autoComplete="off"
-            onChange={(e) => setKey(e.target.value)} />
-        </div>
-        <div className="field">
           <span className="field-label">{t('Message de A')}</span>
           <textarea className="text-area" rows={2} value={original} placeholder={t(EX_MSG)}
             onChange={(e) => setOriginal(e.target.value)} />
         </div>
+        {protect && (
+          <div className="field">
+            <span className="field-label">{t('Clé secrète partagée (A et B)')}</span>
+            <input className="text-input" value={key} placeholder={t(EX_KEY)} autoComplete="off"
+              onChange={(e) => setKey(e.target.value)} />
+          </div>
+        )}
+      </div>
+
+      <div className="intg-toggles">
+        <button className={'pw-protect-btn' + (encrypt ? ' is-on' : '')} aria-pressed={encrypt}
+          onClick={() => setEncrypt((v) => !v)} disabled={phase !== 'idle'}
+          title={phase !== 'idle'
+            ? t('Réinitialise la simulation pour changer cette option.')
+            : t('Désactivée, le message voyage EN CLAIR : seule l’étiquette HMAC (si elle est activée) protège son intégrité, indépendamment de tout chiffrement.')}>
+          <span className="pw-switch-dot" />{encrypt ? t('Chiffrement activé') : t('Activer le chiffrement')}
+        </button>
+        <button className={'pw-protect-btn' + (protect ? ' is-on' : '')} aria-pressed={protect}
+          onClick={() => setProtect((v) => !v)} disabled={phase !== 'idle'}
+          title={phase !== 'idle'
+            ? t('Réinitialise la simulation pour changer cette option.')
+            : t('B recalcule l’étiquette sur ce qu’il a déchiffré et la compare à celle de A. Désactivée, B affiche le message sans aucune vérification.')}>
+          <span className="pw-switch-dot" />{protect ? t('Protection HMAC activée') : t('Activer la protection HMAC')}
+        </button>
+        {record && record.method && (
+          <button className="btn" onClick={() => setRevealed((v) => !v)}>
+            {revealed ? t('Cacher l’algo et la clé tirés au hasard') : t('Voir l’algo et la clé tirés au hasard')}
+          </button>
+        )}
       </div>
 
       {/* ---------------- scène animée du canal ---------------- */}
@@ -228,7 +294,9 @@ export default function IntegrityPanel() {
           </g>
         </svg>
 
-        <div className={'intg-caption' + (phase === 'done' && result ? (result.valid ? ' is-ok' : ' is-bad') : '')}>
+        <div className={'intg-caption' + (phase === 'done'
+          ? (!done || openResult!.broken ? ' is-bad' : !protect ? ' is-ok' : openResult!.valid ? ' is-ok' : ' is-bad')
+          : '')}>
           {caption}
         </div>
 
@@ -253,43 +321,69 @@ export default function IntegrityPanel() {
         <div className="party" style={{ borderColor: 'color-mix(in srgb, var(--ua) 45%, var(--border))' }}>
           <div className="party-head" style={{ color: 'var(--ua)' }}>{t('Utilisateur A (expéditeur)')}</div>
           <div className="intg-msg">{original || <span className="intg-pending">—</span>}</div>
-          <div className="tag-box">
-            <span className="tag-label">{t('Étiquette HMAC envoyée')}</span>
-            <code className="tag-hex">{tagA}</code>
-          </div>
+          {record && record.method && (
+            <div className="tag-box">
+              <span className="tag-label">
+                {t('Chiffré envoyé')} {revealed && `(${algoName(record.method)} · ${t(keyText(asParams(record)!))})`}
+              </span>
+              <code className="tag-hex">{record.secret}</code>
+            </div>
+          )}
+          {record && !record.method && (
+            <div className="intg-note">{t('Chiffrement désactivé : le message voyage en clair.')}</div>
+          )}
+          {protect && (
+            <div className="tag-box">
+              <span className="tag-label">{t('Étiquette HMAC envoyée (sur le clair)')}</span>
+              <code className="tag-hex">{tagA}</code>
+            </div>
+          )}
         </div>
 
         {showC && (
           <div className="party intg-card-c">
             <div className="party-head" style={{ color: 'var(--red)' }}>{t('Attaquant')}</div>
-            <span className="tag-label">{t('Message réécrit par C')}</span>
+            <span className="tag-label">
+              {recordRef.current?.method ? t('Chiffré intercepté — modifie-le') : t('Message intercepté — modifie-le')}
+            </span>
             <textarea ref={cRef} className="text-area" rows={2} value={tampered}
               disabled={phase !== 'atC'}
-              placeholder={t(EX_TAMPER)}
               onChange={(e) => setTampered(e.target.value)} />
             {phase === 'atC' && (
               <button className="btn btn-accent intg-sendc" onClick={sendFromC}>{t('Envoyer à B ↓')}</button>
             )}
-            <span className="intg-note">{t('C n’a pas la clé : il ne peut pas refaire une étiquette valide.')}</span>
+            <span className="intg-note">{t('C n’a pas la clé HMAC : même en modifiant ce qu’il intercepte, il ne peut pas produire une étiquette valide.')}</span>
           </div>
         )}
 
         <div className="party" style={{ borderColor: 'color-mix(in srgb, var(--ub) 45%, var(--border))' }}>
           <div className="party-head" style={{ color: 'var(--ub)' }}>{t('Utilisateur B (destinataire)')}</div>
-          <div className="intg-msg">{phase === 'done' ? received : <span className="intg-pending">{t('en attente…')}</span>}</div>
-          <div className="tag-box">
-            <span className="tag-label">{t('Étiquette recalculée par B')}</span>
-            <code className={'tag-hex' + (result && !result.valid ? ' bad' : '')}>
-              {result ? result.recomputed : '…'}
-            </code>
+          <div className="intg-msg">
+            {!done
+              ? <span className="intg-pending">{t('en attente…')}</span>
+              : openResult!.broken
+                ? <span className="intg-pending">{t('— déchiffrement impossible —')}</span>
+                : openResult!.decrypted}
           </div>
+          {protect ? (
+            <div className="tag-box">
+              <span className="tag-label">{t('Étiquette recalculée par B')}</span>
+              <code className={'tag-hex' + (done && !openResult!.broken && !openResult!.valid ? ' bad' : '')}>
+                {done && !openResult!.broken ? openResult!.recomputed : '…'}
+              </code>
+            </div>
+          ) : (
+            <div className="intg-note">{t('Protection désactivée : B ne vérifie rien, il affiche ce qu’il a déchiffré.')}</div>
+          )}
         </div>
       </div>
 
-      {phase === 'done' && result && (
-        <div className={'verdict ' + (result.valid ? 'ok' : 'bad')}>
-          {result.valid
-            ? t('✓ Message intègre : les deux étiquettes sont identiques, le message n’a pas été modifié.')
+      {phase === 'done' && (
+        <div className={'verdict ' + (!done || openResult!.broken ? 'bad' : !protect ? 'ok' : openResult!.valid ? 'ok' : 'bad')}>
+          {!done ? t('⚠ B n’a pas pu ouvrir le canal.')
+            : openResult!.broken ? t('⚠ Le chiffré reçu est invalide : B ne peut même pas le déchiffrer.')
+            : !protect ? t('✓ B affiche le message comme « bien reçu » — mais SANS AUCUNE vérification : si le chiffré avait été altéré, B ne l’aurait jamais su.')
+            : openResult!.valid ? t('✓ Message intègre : les deux étiquettes sont identiques, le message n’a pas été modifié.')
             : t('✗ Message altéré : les étiquettes diffèrent, le message a été modifié en transit.')}
         </div>
       )}

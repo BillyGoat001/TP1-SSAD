@@ -1,7 +1,62 @@
 {
   "version": 1,
-  "next_id": 16,
+  "next_id": 77,
   "entries": [
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "zzzzzz",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 308915776.0,
+      "timeSec": 21.30404496192932,
+      "id": 57,
+      "at": "2026-11-01T18:12:05+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "zzzzzz",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 308915776.0,
+      "timeSec": 23.69686222076416,
+      "id": 58,
+      "at": "2026-11-01T18:17:21+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "zzzzzz",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 308915776.0,
+      "timeSec": 0.8664910793304443,
+      "id": 59,
+      "at": "2026-11-01T18:37:43+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "zzzzzz",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 308915776.0,
+      "timeSec": 0.8664910793304443,
+      "id": 60,
+      "at": "2026-11-01T18:37:43+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "binaire",
+      "password": "101",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 451052.0,
+      "timeSec": 33.24269413948059,
+      "id": 61,
+      "at": "2026-11-01T19:40:31+00:00"
+    },
     {
       "attack": "brute",
       "case": "binaire",
@@ -9,9 +64,20 @@
       "protection": "Aucune",
       "result": "found",
       "tries": 6.0,
-      "timeSec": 6e-10,
-      "id": 1,
-      "at": "2026-10-21T13:12:45+00:00"
+      "timeSec": 0.0009238719940185547,
+      "id": 62,
+      "at": "2026-11-01T19:50:32+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "binaire",
+      "password": "101",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 451052.0,
+      "timeSec": 0.7825601100921631,
+      "id": 63,
+      "at": "2026-11-01T19:50:37+00:00"
     },
     {
       "attack": "brute",
@@ -20,152 +86,141 @@
       "protection": "Aucune",
       "result": "found",
       "tries": 115.0,
-      "timeSec": 1.15e-08,
-      "id": 2,
-      "at": "2026-10-21T13:12:56+00:00"
+      "timeSec": 0.001004934310913086,
+      "id": 64,
+      "at": "2026-11-01T20:42:13+00:00"
     },
     {
-      "attack": "brute",
+      "attack": "dict",
       "case": "numerique",
       "password": "2413",
       "protection": "Aucune",
       "result": "found",
-      "tries": 115.0,
-      "timeSec": 1.15e-08,
-      "id": 3,
-      "at": "2026-10-21T13:13:07+00:00"
-    },
-    {
-      "attack": "brute",
-      "case": "numerique",
-      "password": "2413",
-      "protection": "Aucune",
-      "result": "found",
-      "tries": 115.0,
-      "timeSec": 1.15e-08,
-      "id": 4,
-      "at": "2026-10-21T13:13:08+00:00"
-    },
-    {
-      "attack": "brute",
-      "case": "numerique",
-      "password": "3121",
-      "protection": "Aucune",
-      "result": "found",
-      "tries": 133.0,
-      "timeSec": 1.33e-08,
-      "id": 5,
-      "at": "2026-10-21T13:13:11+00:00"
+      "tries": 551143.0,
+      "timeSec": 0.755734920501709,
+      "id": 65,
+      "at": "2026-11-01T20:42:15+00:00"
     },
     {
       "attack": "dict",
-      "case": "numerique",
-      "password": "3121",
+      "case": "binaire",
+      "password": "101",
       "protection": "Aucune",
       "result": "found",
-      "tries": 548811.0,
-      "timeSec": 5.48811e-05,
-      "id": 6,
-      "at": "2026-10-21T13:13:27+00:00"
-    },
-    {
-      "attack": "dict",
-      "case": "numerique",
-      "password": "3121",
-      "protection": "Aucune",
-      "result": "found",
-      "tries": 548811.0,
-      "timeSec": 5.48811e-05,
-      "id": 7,
-      "at": "2026-10-21T13:13:34+00:00"
-    },
-    {
-      "attack": "brute",
-      "case": "complexe",
-      "password": "coucoucoucou",
-      "protection": "Aucune",
-      "result": "interrupted",
-      "tries": 255435000000.00003,
-      "timeSec": 25.5435,
-      "id": 8,
-      "at": "2026-10-21T13:14:10+00:00"
-    },
-    {
-      "attack": "brute",
-      "case": "complexe",
-      "password": "111111111111",
-      "protection": "Aucune",
-      "result": "found",
-      "tries": 111111111112.0,
-      "timeSec": 11.1111111112,
-      "id": 9,
-      "at": "2026-10-21T13:14:38+00:00"
-    },
-    {
-      "attack": "brute",
-      "case": "complexe",
-      "password": "999999999999",
-      "protection": "Aucune",
-      "result": "found",
-      "tries": 1000000000000.0,
-      "timeSec": 100.0,
-      "id": 10,
-      "at": "2026-10-21T13:16:34+00:00"
-    },
-    {
-      "attack": "brute",
-      "case": "complexe",
-      "password": "12zzBA",
-      "protection": "exige a-z A-Z 0-9",
-      "result": "found",
-      "tries": 49359018241.0,
-      "timeSec": 4.9359018241,
-      "id": 11,
-      "at": "2026-10-21T13:20:20+00:00"
-    },
-    {
-      "attack": "brute",
-      "case": "complexe",
-      "password": "12-zzBA",
-      "protection": "500 000 000 000 tentatives max · exige a-z A-Z 0-9 symboles · long. min 6",
-      "result": "interrupted",
-      "tries": 334747000000.02985,
-      "timeSec": 33.47470000000298,
-      "id": 12,
-      "at": "2026-10-21T13:21:37+00:00"
-    },
-    {
-      "attack": "brute",
-      "case": "complexe",
-      "password": "12-zBA",
-      "protection": "500 000 000 000 tentatives max · exige a-z A-Z 0-9 symboles · long. min 6",
-      "result": "found",
-      "tries": 252326146673.0,
-      "timeSec": 25.2326146673,
-      "id": 13,
-      "at": "2026-10-21T13:22:13+00:00"
-    },
-    {
-      "attack": "brute",
-      "case": "complexe",
-      "password": "00000000000000000000000000000000",
-      "protection": "Aucune",
-      "result": "found",
-      "tries": 1.0,
-      "timeSec": 1e-10,
-      "id": 14,
-      "at": "2026-10-21T13:24:53+00:00"
+      "tries": 451052.0,
+      "timeSec": 0.7167520523071289,
+      "id": 66,
+      "at": "2026-11-01T20:42:19+00:00"
     },
     {
       "attack": "dict",
       "case": "complexe",
-      "password": "2Wo,",
+      "password": "/?[o*6",
       "protection": "Aucune",
       "result": "resist",
-      "tries": 14344424.0,
-      "timeSec": 0.0014344424,
-      "id": 15,
-      "at": "2026-10-21T13:33:11+00:00"
+      "tries": 145916634.0,
+      "timeSec": 3.18428897857666,
+      "id": 67,
+      "at": "2026-11-01T20:42:27+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "/?[o*6",
+      "protection": "sans indice",
+      "result": "interrupted",
+      "tries": 4737140000.0,
+      "timeSec": 12.174647092819214,
+      "id": 68,
+      "at": "2026-11-01T20:42:41+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "/?[o*6",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 46640933013.0,
+      "timeSec": 120.61190295219421,
+      "id": 69,
+      "at": "2026-11-01T20:44:46+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "numerique",
+      "password": "2413",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 115.0,
+      "timeSec": 0.0004918575286865234,
+      "id": 70,
+      "at": "2026-11-01T21:39:32+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "numerique",
+      "password": "2413",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 551143.0,
+      "timeSec": 32.897024154663086,
+      "id": 71,
+      "at": "2026-11-01T21:40:06+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "binaire",
+      "password": "101",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 451052.0,
+      "timeSec": 0.7668948173522949,
+      "id": 72,
+      "at": "2026-11-01T21:58:33+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "numerique",
+      "password": "2413",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 551143.0,
+      "timeSec": 0.7430589199066162,
+      "id": 73,
+      "at": "2026-11-01T21:58:36+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "numerique",
+      "password": "2413",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 551143.0,
+      "timeSec": 0.7348878383636475,
+      "id": 74,
+      "at": "2026-11-01T21:58:39+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "numerique",
+      "password": "2432",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 2313271.0,
+      "timeSec": 0.7481601238250732,
+      "id": 75,
+      "at": "2026-11-01T21:58:44+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "numerique",
+      "password": "3213",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 372727.0,
+      "timeSec": 0.7321820259094238,
+      "id": 76,
+      "at": "2026-11-01T21:58:47+00:00"
     }
   ]
 }

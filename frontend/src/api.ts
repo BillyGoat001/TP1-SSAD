@@ -6,7 +6,8 @@ import type {
   CasesResponse, ValidateResult, Rules, IntegrityDemo,
   KeygenResponse, ExchangeParams, SealResponse, OpenResponse,
   HistoryEntry, HistoryDraft, ChatRecord, PwHistoryEntry, PwHistoryDraft,
-  Challenge, LoginResult, AuthStatus,
+  Challenge, LoginResult, AuthStatus, AttackStartInput, AttackSnapshot,
+  CipherRecord, IntegritySealResult, IntegrityOpenResult,
 } from './types'
 
 // Session expirée (le serveur répond 401) : l'appli revient sur la page de connexion.
@@ -34,6 +35,20 @@ async function del<T>(url: string): Promise<T> {
   const res = await fetch(url, { method: 'DELETE' })
   guard(res)
   return (await res.json()) as T
+}
+
+interface AuthPayload {
+  username: string; password: string; captcha_id: string; answer: string | number; nonce: number
+  human: { ms: number; events: number }
+}
+
+async function sendAuth(url: string, payload: AuthPayload): Promise<LoginResult> {
+  const res = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  })
+  let body: Partial<LoginResult> = {}
+  try { body = await res.json() } catch { /* réponse vide */ }
+  return { ok: false, ...body, status: res.status } as LoginResult
 }
 
 export interface CipherInput {
@@ -68,17 +83,9 @@ export const api = {
       }).catch(() => undefined)
     } catch { /* ignore */ }
   },
-  login: async (payload: {
-    username: string; password: string; captcha_id: string; answer: string | number; nonce: number
-    human: { ms: number; events: number }
-  }): Promise<LoginResult> => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-    })
-    let body: Partial<LoginResult> = {}
-    try { body = await res.json() } catch { /* réponse vide */ }
-    return { ok: false, ...body, status: res.status } as LoginResult
-  },
+  login: (payload: AuthPayload) => sendAuth('/api/auth/login', payload),
+  // inscription : mêmes champs et mêmes protections que la connexion
+  register: (payload: AuthPayload) => sendAuth('/api/auth/register', payload),
   logout: async () => { try { await fetch('/api/auth/logout', { method: 'POST' }) } catch { /* ignore */ } },
 
   cipher: (input: CipherInput) => post<CipherResponse>('/api/cipher', input),
@@ -100,6 +107,17 @@ export const api = {
 
   dictionary: (target: string, limit?: number | null) =>
     post<DictResult>('/api/passwords/dictionary', { target, limit }),
+
+  // attaque en tâche de fond : vraie boucle côté serveur, à relire par polling
+  // (attackProgress) pour une barre de progression RÉELLE, interruptible pour de
+  // vrai (attackStop coupe le thread, pas seulement l'affichage).
+  attackStart: (input: AttackStartInput) =>
+    post<AttackSnapshot>('/api/passwords/attack/start', {
+      kind: input.kind, case: input.caseId, target: input.target, length: input.length,
+      limit: input.limit, rules: input.rules, know_composition: input.knowComposition, lang: input.lang,
+    }),
+  attackProgress: (id: string) => get<AttackSnapshot>(`/api/passwords/attack/progress/${id}`),
+  attackStop: (id: string) => post<{ ok: boolean; stopped: boolean }>(`/api/passwords/attack/stop/${id}`, {}),
 
   validate: (caseId: string, target: string, length?: number, rules?: Rules | null) =>
     post<ValidateResult>('/api/passwords/validate', { case: caseId, target, length, rules }),
@@ -125,4 +143,12 @@ export const api = {
 
   integrityDemo: (key: string, original: string, received: string) =>
     post<IntegrityDemo>('/api/integrity/demo', { key, original, received }),
+
+  // canal A -> B réel : A chiffre (algo tiré au hasard) + signe le clair ; B ouvre
+  // ce qui est arrivé (potentiellement altéré par C dans record.secret) et, si la
+  // protection est active, vérifie l'étiquette.
+  integritySeal: (key: string, message: string, encrypt: boolean) =>
+    post<IntegritySealResult>('/api/integrity/seal', { key, message, encrypt }),
+  integrityOpen: (key: string, record: CipherRecord, protect: boolean, tag: string | null) =>
+    post<IntegrityOpenResult>('/api/integrity/open', { key, record, protect, tag }),
 }

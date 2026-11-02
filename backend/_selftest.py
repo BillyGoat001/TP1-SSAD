@@ -6,7 +6,9 @@ os.environ["TP_AUTH_OFF"] = "1"        # les tests de l'API ci-dessous tournent 
 import encryption as en
 import traces
 import passwords as pw
+import attacks
 import integrity
+import auth
 
 def section(t): print("\n=== " + t + " ===")
 
@@ -120,6 +122,28 @@ d = pw.dictionary_attack("2413", limit=50)   # 2413 est au-dela de la position 5
 assert not d["found"] and d["stopped"] and d["scanned"] == 50, d  # arrete par la limite
 print("dictionnaire: mot absent -> non trouve ; limite -> arret OK")
 
+# PIN a 4 chiffres (cas "numerique") : les 256 combinaisons sont TOUTES dans le
+# dictionnaire desormais (dictionnaire_extra.txt complete les 32 qui manquaient),
+# comme les 8/8 du cas "binaire" -- un seul passage dans le dictionnaire pour les 256
+import itertools
+pins = {"".join(c) for c in itertools.product("1234", repeat=4)}
+found_pins = set()
+for w in pw._iter_words():
+    if w in pins:
+        found_pins.add(w)
+        if len(found_pins) == len(pins):
+            break
+assert found_pins == pins, sorted(pins - found_pins)
+bins = {"".join(c) for c in itertools.product("01", repeat=3)}
+found_bins = set()
+for w in pw._iter_words():
+    if w in bins:
+        found_bins.add(w)
+        if len(found_bins) == len(bins):
+            break
+assert found_bins == bins, sorted(bins - found_bins)
+print("PIN numerique (256/256) et mot de passe binaire (8/8) : toutes les combinaisons sont dans le dictionnaire OK")
+
 # validation de la politique (cas complexe)
 v = pw.validate("abcdefgh", "complexe", 8, {"require_upper": True, "require_digit": True})
 assert not v["valid"] and len(v["reasons"]) == 2, v
@@ -175,6 +199,107 @@ for gone in ("hash_password", "verify_password", "analyze", "speeds", "ATTACKERS
     assert not hasattr(pw, gone), gone + " devrait etre supprime"
 print("aucune trace de hachage / comparaison / attaquants OK")
 
+# ---- attaques en tache de fond (vraie boucle, vraie progression, vrai arret) ----
+section("Attacks (tache de fond)")
+import time as _time2
+
+# cas instantane (binaire) : termine quasi immediatement, meme resultat que pw.brute_force
+# (le thread tourne reellement en arriere-plan -- meme pour un cas minuscule, on attend
+# qu'il se termine plutot que de supposer qu'il l'est deja au retour de l'appel)
+r = attacks.start_bruteforce("101", "binaire")
+for _ in range(200):
+    if r.snapshot()["done"]:
+        break
+    _time2.sleep(0.005)
+assert r.done and r.result["cracked"] and r.result["rank"] == 6, r.result
+print("force brute instantanee (binaire) : meme resultat qu'en synchrone OK")
+
+# dictionnaire : vraie boucle reelle (pas de saut), meme resultat que pw.dictionary_attack
+r = attacks.start_dictionary("azerty", lang="fr")
+for _ in range(100):
+    s = r.snapshot()
+    if s["done"]:
+        break
+    _time2.sleep(0.02)
+assert s["done"] and s["result"]["found"] and s["result"]["position"] == 1, s
+assert s["pos"] > 0 and s["elapsed"] >= 0, s                    # la progression a vraiment avance
+print("dictionnaire en tache de fond : trouve 'azerty' #1, memes chiffres qu'en synchrone OK")
+
+# grand espace complexe : ca boucle reellement (pos augmente), et "Interrompre" arrete
+# VRAIMENT le thread (pas seulement l'affichage) -- la cible est hors de portee en
+# un instant donc l'attaque est encore en cours quand on va regarder
+r = attacks.start_bruteforce("Zz9!Zz9!Zz9!", "complexe", length=12)
+_time2.sleep(0.2)
+s1 = r.snapshot()
+assert not s1["done"] and s1["pos"] > 0, s1
+assert attacks.stop(r.id)
+_time2.sleep(0.3)
+s2 = r.snapshot()
+assert s2["done"], s2                                            # le thread s'est bien arrete
+pos_apres_stop = s2["pos"]
+_time2.sleep(0.2)
+assert r.snapshot()["pos"] == pos_apres_stop                     # et ne continue pas en arriere-plan
+print("force brute complexe : boucle reelle + Interrompre coupe vraiment le thread OK")
+
+# identifiant inconnu -> None (traduit par l'API en erreur "introuvable")
+assert attacks.get("xxx") is None and not attacks.stop("xxx")
+print("identifiant d'attaque inconnu gere proprement OK")
+
+# l'ordre de lecture change avec la langue de l'interface, pas le total parcouru
+assert pw._dict_order("fr")[:2] == ["francais", "anglais"]
+assert pw._dict_order("en")[:2] == ["anglais", "francais"]
+assert set(pw._dict_order("fr")) == set(pw._dict_order("en")) == set(pw._LANG_FILES)
+print("ordre du dictionnaire selon la langue de l'interface (meme total parcouru) OK")
+
+# ---- boucles natives (C) : disponibles ici, et memes resultats que le repli Python ----
+import native_attacks as native
+assert native.available(), "gcc indisponible dans cet environnement de test"
+rate = native.calibrate()
+assert rate > 0
+print(f"boucle C compilee et calibree ({rate:,.0f} essais/s) OK".replace(",", " "))
+
+# force brute : meme rang trouve par le C (via attacks.py) et par rank_of (formule exacte)
+r = attacks.start_bruteforce("tst9", "complexe", length=4, know_composition=True)
+for _ in range(200):
+    if r.snapshot()["done"]:
+        break
+    _time2.sleep(0.01)
+assert r.done and r.result["native"] is True
+cs = pw.detected_charset("tst9")
+assert r.result["rank"] == pw.rank_of("tst9", cs, 4)
+print("force brute (C) : rang identique a la formule exacte OK")
+
+# dictionnaire : meme resultat (position, trouve) que l'ancienne boucle Python pure
+r_native = attacks.start_dictionary("bonjour", lang="fr")
+for _ in range(200):
+    if r_native.snapshot()["done"]:
+        break
+    _time2.sleep(0.01)
+assert r_native.done and r_native.result["native"] is True
+
+pos_py = 0
+found_py = False
+for w in pw._iter_words("fr"):
+    pos_py += 1
+    if w == "bonjour":
+        found_py = True
+        break
+assert r_native.result["found"] == found_py
+assert r_native.result["position"] == pos_py
+print("dictionnaire (C) : meme position que la boucle Python de reference OK")
+
+# interruption : fonctionne aussi pour la boucle C du dictionnaire (gros dictionnaire,
+# cible absente -> on l'arrete en plein vol)
+r_stop = attacks.start_dictionary("mot-de-passe-qui-nexiste-vraiment-pas-xyz", lang="fr")
+_time2.sleep(0.05)
+assert attacks.stop(r_stop.id)
+for _ in range(200):
+    if r_stop.snapshot()["done"]:
+        break
+    _time2.sleep(0.01)
+assert r_stop.done
+print("dictionnaire (C) : Interrompre coupe vraiment le thread OK")
+
 # ---- integrity ----
 section("Integrity")
 tag = integrity.sign("sharedkey", "Transfer 100")
@@ -183,6 +308,54 @@ assert not integrity.verify("sharedkey", "Transfer 900", tag)
 dm = integrity.demo("sharedkey", "Transfer 100", "Transfer 900")
 assert dm["tampered"] and not dm["valid"]
 print("HMAC sign/verify + tamper detection OK")
+
+# ---- canal A -> B reel (chiffre + etiquette sur le clair) ----
+msg = "Transfer 100 to B"
+sealed = integrity.seal("sharedkey", msg)
+assert sealed["record"]["method"] in ("caesar", "playfair", "hill")
+assert sealed["record"]["secret"] != msg                      # vraiment chiffre
+
+# non altere, protection ON -> intact
+r = integrity.open_channel("sharedkey", sealed["record"], True, sealed["tag"])
+assert r["decrypted"] == msg and r["valid"] is True and not r["broken"]
+
+# non altere, protection OFF -> affiche quand meme, mais pas de verdict
+r = integrity.open_channel("sharedkey", sealed["record"], False, sealed["tag"])
+assert r["decrypted"] == msg and r["valid"] is None and not r["broken"]
+
+# C altere un caractere du chiffre : le dechiffre change forcement
+# (premier caractere, jamais un filler de bourrage Playfair/Hill ajoute en fin de
+# bloc -- sinon l'alteration serait parfois strip_fillers()-ee sans effet visible,
+# un faux negatif aleatoire selon l'algo tire au hasard)
+tampered = dict(sealed["record"])
+s = tampered["secret"]
+tampered["secret"] = ("A" if s[0] != "A" else "B") + s[1:]
+
+r_on = integrity.open_channel("sharedkey", tampered, True, sealed["tag"])
+assert r_on["decrypted"] != msg and r_on["valid"] is False and not r_on["broken"]
+
+r_off = integrity.open_channel("sharedkey", tampered, False, sealed["tag"])
+assert r_off["decrypted"] == r_on["decrypted"] and r_off["valid"] is None   # affiche sans verification -> la faille
+
+# chiffre Hill tronque (longueur qui n'est plus un multiple du bloc) -> echec propre, pas de crash
+hrecord = auth.encipher(msg, "hill", auth.random_key("hill"))
+htag = integrity.sign("sharedkey", msg)
+broken = dict(hrecord)
+broken["secret"] = broken["secret"][:-1]
+r_broken = integrity.open_channel("sharedkey", broken, True, htag)
+assert r_broken["broken"] and r_broken["decrypted"] is None
+print("canal A->B reel : chiffre+etiquette sur le clair, alteration detectee, protection off = faille demontree OK")
+
+# chiffrement DESACTIVE (encrypt=False) : le message voyage en clair, mais l'etiquette
+# HMAC protege quand meme l'integrite independamment du chiffrement
+s_clair = integrity.seal("sharedkey", msg, encrypt=False)
+assert s_clair["record"]["method"] is None and s_clair["record"]["secret"] == msg
+r_clair = integrity.open_channel("sharedkey", s_clair["record"], True, s_clair["tag"])
+assert r_clair["decrypted"] == msg and r_clair["valid"] is True
+tampered_clair = dict(s_clair["record"])
+tampered_clair["secret"] = msg.replace("100", "900")
+assert integrity.open_channel("sharedkey", tampered_clair, True, s_clair["tag"])["valid"] is False
+print("canal A->B : chiffrement desactivable independamment de la protection HMAC OK")
 
 # ---- API endpoints ----
 section("API endpoints")
@@ -282,6 +455,60 @@ assert dec["ok"] and dec["result"] == "BONJOUR", dec
 bad = c.post("/api/exchange/open", json={"n":A["n"],"d":A["d"],"blocks":[b["c"] for b in seal["blocks"]]}).json()
 assert not bad.get("ok") or bad.get("params") != opened["params"], bad
 print("RSA exchange endpoints OK (A -> B, wrong key rejected)")
+
+# attaques en tache de fond, par l'API : start -> progress (polling) -> stop
+r = c.post("/api/passwords/attack/start", json={"kind": "brute", "case": "binaire", "target": "101"}).json()
+rid = r["id"]
+for _ in range(200):
+    r = c.get(f"/api/passwords/attack/progress/{rid}").json()
+    if r["done"]:
+        break
+    _time2.sleep(0.005)
+assert r["ok"] and r["done"] and r["result"]["cracked"] and r["result"]["rank"] == 6, r
+
+r = c.post("/api/passwords/attack/start", json={"kind": "dict", "target": "azerty", "lang": "fr"}).json()
+assert r["ok"] and r["id"], r
+rid = r["id"]
+for _ in range(100):
+    p = c.get(f"/api/passwords/attack/progress/{rid}").json()
+    if p["done"]:
+        break
+    _time2.sleep(0.02)
+assert p["ok"] and p["done"] and p["result"]["found"] and p["result"]["position"] == 1, p
+
+r = c.post("/api/passwords/attack/start",
+           json={"kind": "brute", "case": "complexe", "target": "Qw8!Qw8!Qw8!", "length": 12}).json()
+rid = r["id"]
+_time2.sleep(0.2)
+p = c.get(f"/api/passwords/attack/progress/{rid}").json()
+assert p["ok"] and not p["done"] and p["pos"] > 0, p                 # bien en cours, vraie progression
+st = c.post(f"/api/passwords/attack/stop/{rid}").json()
+assert st["ok"] and st["stopped"], st
+_time2.sleep(0.2)
+assert c.get(f"/api/passwords/attack/progress/{rid}").json()["done"]  # le thread s'est vraiment arrete
+
+assert not c.get("/api/passwords/attack/progress/xxx").json()["ok"]   # identifiant inconnu
+print("attaques en tache de fond (start/progress/stop) : vraie progression, vrai arret OK")
+
+# integrite (P4) : canal reel seal/open, par l'API
+sl = c.post("/api/integrity/seal", json={"key": "sharedkey", "message": "Transfer 100"}).json()
+assert sl["ok"] and sl["record"]["secret"] != "Transfer 100"
+
+op = c.post("/api/integrity/open",
+            json={"key": "sharedkey", "record": sl["record"], "protect": True, "tag": sl["tag"]}).json()
+assert op["ok"] and op["decrypted"] == "Transfer 100" and op["valid"] is True
+
+rec2 = dict(sl["record"])
+sec = rec2["secret"]
+rec2["secret"] = sec[:-1] + ("A" if sec[-1] != "A" else "B")
+op_on = c.post("/api/integrity/open",
+               json={"key": "sharedkey", "record": rec2, "protect": True, "tag": sl["tag"]}).json()
+assert op_on["ok"] and op_on["valid"] is False
+op_off = c.post("/api/integrity/open",
+                json={"key": "sharedkey", "record": rec2, "protect": False, "tag": sl["tag"]}).json()
+assert op_off["ok"] and op_off["valid"] is None and op_off["decrypted"] == op_on["decrypted"]
+print("integrite (P4) : seal/open par l'API, chiffre altere detecte avec protection, invisible sans OK")
+
 print("All endpoints OK")
 
 # ---- fichiers : historique des chiffrements + conversation A <-> B ----
@@ -416,20 +643,70 @@ print("Hill : permutation ; Playfair : grille de l'alphabet (26 clés) ; autres 
 # ---- connexion : comptes, sessions, captchas, protection de l'API ----
 section("Connexion")
 import time as _time
-import auth, captcha
+import auth, captcha, db
 os.environ.pop("TP_AUTH_OFF", None)
-os.environ["USERS_FILE"] = os.path.join(tempfile.mkdtemp(), "users.json")     # comptes de test, pas les vrais
+os.environ["USERS_DB"] = os.path.join(tempfile.mkdtemp(), "users.db")         # base de test, pas la vraie
 auth.reset_limits()
 PW = "Mot-de-passe-de-test-42"
-with open(os.environ["USERS_FILE"], "w", encoding="utf-8") as f:
-    json.dump({"users": {"alice": auth.hash_password(PW)}}, f)
-# hachage : sel aléatoire, vérification, mauvais mot de passe, format cassé
-h1, h2 = auth.hash_password(PW), auth.hash_password(PW)
-assert h1 != h2 and auth.verify_password(PW, h1) and not auth.verify_password(PW + "x", h1)
-assert not auth.verify_password(PW, "n'importe quoi") and not auth.verify_password(PW, "md5$1$aa$bb")
-assert PW not in open(os.environ["USERS_FILE"], encoding="utf-8").read()                      # jamais en clair
-assert auth.check_credentials("Alice", PW) == "alice" and auth.check_credentials("alice", "faux") is None
-assert auth.check_credentials("inconnu", PW) is None
+auth.set_password("alice", PW)
+# chiffrement des mots de passe : réversible, un algorithme et une clé au hasard, jamais de hachage
+import random as _random
+_rnd = _random.Random(7)
+_alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?#@$%&*-_."
+for method in auth.METHODS:
+    for _ in range(300):
+        pwd = "".join(_rnd.choice(_alpha) for _ in range(_rnd.randint(1, 24)))
+        key = auth.random_key(method)
+        rec = auth.encipher(pwd, method, key)
+        rec["method"] = method
+        assert auth.decipher(rec) == pwd, (method, pwd, key)                                # aller-retour exact (J, X, minuscules, symboles)
+        assert auth.verify_password(pwd, rec) and not auth.verify_password(pwd + "a", rec)
+        assert rec["secret"] == "" or (rec["secret"].isalpha() and rec["secret"].isupper())  # le secret : lettres majuscules seulement
+for pwd in ("Jaja-XXQ-jj1!", "xx", "ZZ9", "Ab1!Ab1!"):                                      # cas piégeux : J, X, doubles lettres
+    for method in auth.METHODS:
+        rec = auth.encipher(pwd, method, auth.random_key(method))
+        assert auth.decipher(rec) == pwd, (method, pwd)
+seen_methods = {auth.make_record("Abcdef1!")["method"] for _ in range(80)}
+assert seen_methods == set(auth.METHODS), seen_methods                                       # le tirage utilise bien les trois
+r1, r2 = auth.make_record(PW), auth.make_record(PW)
+assert r1["secret"] != PW.upper() and auth.decipher(r1) == PW
+row = db.get_user("ALICE")                                                                  # base : nom insensible à la casse
+assert row["username"] == "alice" and row["method"] in auth.METHODS and row["secret"].isalpha()
+assert auth.decipher(row) == PW and not auth.verify_password("faux", row)
+assert not auth.verify_password("Mot-de-passe-de-test-é2", row)                              # accents refusés sans erreur
+if db.PG:                                                                                     # base Postgres (DATABASE_URL) : même vérif, dans la table
+    with db.closing(db._connect()) as _con:
+        raw = repr(_con.execute(db._q("SELECT * FROM users")).fetchall()).encode()
+else:
+    raw = open(os.environ["USERS_DB"], "rb").read()                                          # base SQLite : le fichier
+assert PW.encode() not in raw and b"Motdepassedetest" not in raw                             # le mot de passe n'est pas en clair dans la base
+assert "pbkdf2" not in open("auth.py", encoding="utf-8").read().lower()                  # aucun hachage de mot de passe
+# tentatives : au plus 4 mots de passe erronés de suite, PAR COUPLE (compte, IP)
+IP1, IP2 = "1.2.3.4", "9.9.9.9"
+assert auth.attempt_login("Alice", PW, IP1) == ("alice", auth.MAX_ATTEMPTS)
+assert auth.attempt_login("alice", "x1", IP1)[1] == 3 and auth.attempt_login("alice", "x2", IP1)[1] == 2
+assert auth.attempt_login("alice", PW, IP1)[0] == "alice"                      # une réussite remet à zéro
+assert [auth.attempt_login("alice", "x", IP1)[1] for _ in range(4)] == [3, 2, 1, 0]
+assert auth.is_blocked("alice", IP1) and db.unlock("alice") and not auth.is_blocked("alice", IP1)
+assert [auth.attempt_login("inconnu", "x", IP1)[1] for _ in range(4)] == [3, 2, 1, 0] and auth.is_blocked("inconnu", IP1)   # mêmes réponses pour un nom inconnu
+auth.reset_limits()
+# le blocage est scopé par IP : une autre IP sur le MÊME compte n'est pas affectée
+assert [auth.attempt_login("alice", "x", IP1)[1] for _ in range(4)] == [3, 2, 1, 0]
+assert auth.is_blocked("alice", IP1) and not auth.is_blocked("alice", IP2)                        # IP2 jamais essayée : pas bloquée
+assert auth.attempt_login("alice", PW, IP2)[0] == "alice"                                          # ... et peut se connecter avec le bon mot de passe
+assert db.unlock("alice") and not auth.is_blocked("alice", IP1)                                    # --unlock débloque toutes les IP d'un coup
+auth.reset_limits()
+print("blocage par couple (compte, IP) : une IP bloquée n'affecte pas les autres OK")
+# inscription : nom, règles du mot de passe, doublon
+assert auth.password_problem("Abcdef1!") is None and auth.password_problem("A1!aaaaa") is None
+for bad in ("Abc1!", "abcdefg1!", "ABCDEFG1!", "Abcdefgh!", "Abcdefg12", "Abcdé1!x", "Abc def1!", "A" * 70 + "a1!"):
+    assert auth.password_problem(bad), bad
+assert auth.register("ab", "Abcdef1!") == (None, "username") and auth.register("bad name", "Abcdef1!") == (None, "username")
+assert auth.register("carol", "faible") == (None, "policy")
+assert auth.register("Carol", "Abcdef1!") == ("Carol", None) and auth.register("CAROL", "Abcdef1!") == (None, "exists")
+assert auth.attempt_login("carol", "Abcdef1!", IP1)[0] == "Carol"
+print(f"chiffrement des mots de passe (3 algos, tirage aléatoire, aller-retour) · base {'PostgreSQL' if db.PG else 'SQLite'} · 4 tentatives par IP · inscription OK")
+
 # jeton de session : signé, expirant, falsifiable impossible, fermable
 tok = auth.make_token("alice")
 assert auth.read_token(tok) == "alice"
@@ -440,7 +717,7 @@ assert auth.read_token(tok, now=_time.time() + auth.SESSION_SECONDS + 5) is None
 assert auth.read_token(auth.make_token("bob")) is None                                          # compte inexistant
 auth.revoke_token(tok)
 assert auth.read_token(tok) is None
-print("hachage PBKDF2 sel/format · jeton signé, expirant, révocable OK")
+print("jeton signé, expirant, révocable OK")
 
 # captchas : chaque sorte, usage unique, expiration, preuve de travail, trop rapide
 seen = set()
@@ -517,17 +794,52 @@ forged = TestClient(app); forged.cookies.set("tp_session", "YWxpY2U.9999999999.a
 assert forged.get("/api/history").status_code == 401
 print("API fermée sans session · cookie HttpOnly · déconnexion · jeton révoqué/falsifié refusés OK")
 
-# trop d'essais : attente de plus en plus longue
+# trop d'essais : 4 mots de passe erronés → compte bloqué, même avec le bon mot de passe
 auth.reset_limits()
 bf = TestClient(app)
-for i in range(auth.FREE_FAILS):
-    assert login(bf, pwd="faux" + str(i)).status_code == 401
+got = []
+for i in range(3):
+    r = login(bf, pwd="faux" + str(i))
+    assert r.status_code == 401 and r.json()["error"] == "credentials", r.text
+    got.append(r.json()["remaining"])
+assert got == [3, 2, 1], got
+r = login(bf, pwd="faux4")                                                                     # la 4e erreur bloque
+assert r.status_code == 423 and r.json()["error"] == "blocked", r.text
 r = login(bf, pwd=PW)                                                                          # même avec le BON mot de passe
-assert r.status_code == 429 and r.json()["error"] == "locked" and r.json()["retry_after"] >= 1, r.text
-assert auth.locked_for("u:alice") > 0
+assert r.status_code == 423 and r.json()["error"] == "blocked", r.text
+assert db.is_attempt_blocked("alice", "testclient")                                             # bloqué pour l'IP du TestClient
+r = login(bf, user="inconnu", pwd="x")                                                          # nom inconnu : même parcours
+assert r.status_code == 401 and r.json()["remaining"] == 3
+auth.reset_limits()                                                                            # (la limite par IP est un autre garde-fou)
+# une AUTRE adresse (X-Forwarded-For) n'est pas bloquée : elle peut se connecter avec le bon mot de passe
+other = TestClient(app, headers={"X-Forwarded-For": "5.6.7.8"})
+assert login(other).status_code == 200
+other.post("/api/auth/logout")
+assert db.unlock("alice") and login(bf).status_code == 200                                      # --unlock débloque TOUTES les IP : la connexion marche aussi pour bf
+print("blocage après", auth.MAX_ATTEMPTS, "mots de passe erronés, PAR IP (une autre IP n'est pas affectée) OK")
+
+# inscription par l'API : défi + règles du mot de passe + doublon, puis connexion
 auth.reset_limits()
-assert login(bf).status_code == 200
-print("verrouillage après", auth.FREE_FAILS, "échecs OK")
+rc = TestClient(app)
+def register(cl, user, pwd, human=None):
+    chj = cl.get("/api/auth/captcha").json()["challenge"]
+    nonce = captcha.solve_pow(chj["pow"]["challenge"], chj["pow"]["bits"])
+    ans = solved(chj, None, True)
+    return cl.post("/api/auth/register", json={"username": user, "password": pwd, "captcha_id": chj["id"], "answer": ans,
+                                               "nonce": nonce, "human": human or {"ms": 4000, "events": 9}})
+r = register(rc, "bob", "faible")
+assert r.status_code == 400 and r.json()["error"] == "policy" and "au moins" in r.json()["message"], r.text
+r = register(rc, "bob", "Abcdef1!", human={"ms": 100, "events": 0})
+assert r.status_code == 400 and r.json()["reason"] == "robot"                                   # même garde-fou que la connexion
+r = register(rc, "bo", "Abcdef1!")
+assert r.status_code == 400 and r.json()["error"] == "username"
+r = register(rc, "bob", "Abcdef1!")
+assert r.status_code == 201 and r.json()["user"] == "bob" and "set-cookie" not in r.headers, r.text
+assert register(rc, "BOB", "Abcdef1!").status_code == 409                                       # doublon (casse ignorée)
+assert rc.get("/api/history").status_code == 401                                                # s'inscrire ne connecte pas
+assert login(rc, user="bob", pwd="Abcdef1!").status_code == 200 and rc.get("/api/history").status_code == 200
+assert auth.decipher(db.get_user("bob")) == "Abcdef1!"
+print("inscription (API) : défi, règles du mot de passe, doublon, connexion ensuite OK")
 os.environ["TP_AUTH_OFF"] = "1"
 auth.reset_limits()
 

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { BruteResult, DictResult, CasesResponse, SpeedTable, Rules, Strength, PwHistoryEntry, PwHistoryDraft, PwResult } from '../../types'
+import type { BruteResult, DictResult, CasesResponse, SpeedTable, Rules, Strength, PwHistoryEntry, PwHistoryDraft, PwResult, AttackSnapshot } from '../../types'
 import { api } from '../../api'
 import PwHistory from './PwHistory'
 import { fmtDur, fmtTries } from './format'
-import { t, _t, num, locale, plural } from '../../i18n'
+import { t, _t, num, locale, plural, getLang } from '../../i18n'
 
 // ---------------------------------------------------------------- constantes ----
 const CASE_IDS = ['binaire', 'numerique', 'complexe'] as const
@@ -18,7 +18,7 @@ const DIGITS = '0123456789'
 const SYMBOLS = '!@#$%^&*()-_=+[]{};:,.?/'
 
 const SCRAMBLE_MS = 55
-const DEFAULT_RATE = 1e10           // essais/s de l'attaquant (le backend renvoie la valeur officielle)
+const POLL_MS = 150                 // fréquence de relecture de la progression RÉELLE côté serveur
 
 const EMPTY_RULES: Rules = {
   require_lower: false, require_upper: false, require_digit: false, require_symbol: false, min_length: null,
@@ -27,6 +27,29 @@ const EMPTY_RULES: Rules = {
 // ---------------------------------------------------------------- helpers ----
 const strengthClass = (s: Strength) => `is-${s}`
 const WEAK: Strength[] = ['instant', 'faible', 'moyen']
+const FAST_RATE_FALLBACK = 1e10     // repli le temps que /api/passwords/cases réponde
+const YEAR_SECONDS = 31_536_000
+
+// Port fidèle de passwords.py human_time(seconds, compact=True) — mêmes seuils,
+// mêmes mots, pour que la case « ta cible réelle » parle le même langage que le
+// reste du site (et que ce qui s'affichera après une vraie attaque).
+function humanTimeCompact(seconds: number): [string, Strength] {
+  const s = seconds
+  if (!isFinite(s)) return ['10^100+ ans', 'inviolable']
+  if (s < 1e-3) return ['instantané', 'instant']
+  if (s < 1) return ['< 1 s', 'instant']
+  if (s < 60) return [`${Math.round(s)} s`, 'faible']
+  if (s < 3600) return [`${Math.round(s / 60)} min`, 'faible']
+  if (s < 86400) return [`${Math.round(s / 3600)} h`, 'moyen']
+  if (s < 2_592_000) return [`${Math.round(s / 86400)} j`, 'moyen']
+  if (s < YEAR_SECONDS) return [`${Math.round(s / 2_592_000)} mois`, 'moyen']
+  const y = s / YEAR_SECONDS
+  if (y < 100) { const n = Math.round(y); return [n === 1 ? '1 an' : `${n} ans`, 'fort'] }
+  if (y < 1000) { const c = Math.round(y / 100); return [c === 1 ? '1 siècle' : `${c} siècles`, 'fort'] }
+  if (y < 1_000_000) { const m = Math.round(y / 1000); return [m === 1 ? '1 millénaire' : `${m} millénaires`, 'inviolable'] }
+  const k = Math.floor(Math.log10(y))
+  return [`10^${k} ans`, 'inviolable']
+}
 
 function randStr(charset: string, len: number): string {
   let out = ''
@@ -170,7 +193,7 @@ export default function PasswordsPanel() {
   const [rules, setRules] = useState<Rules>(EMPTY_RULES)
   const [limitOn, setLimitOn] = useState(false)      // « limiter les tentatives » (cas complexe)
   const [limitStr, setLimitStr] = useState('5')      // champ libre (entier positif)
-  const [knowComposition, setKnowComposition] = useState(true)   // indice : l'attaquant connaît la composition
+  const [knowComposition, setKnowComposition] = useState(false)   // indice : l'attaquant connaît la composition
 
   // attaque / verdict
   const [attacking, setAttacking] = useState<'brute' | 'dict' | null>(null)
@@ -184,10 +207,9 @@ export default function PasswordsPanel() {
   const [err, setErr] = useState<string | null>(null)
 
   const anim = useRef<{
-    raf?: number; scramble?: number; start: number
-    total: number; end: number; outcome: Outcome | null; interrupted: boolean
-    runId: number; rate: number; fullHuman: string | null; meta: Meta | null
-  }>({ start: 0, total: 1, end: 0, outcome: null, interrupted: false, runId: 0, rate: DEFAULT_RATE, fullHuman: null, meta: null })
+    poll?: number; scramble?: number
+    attackId: string | null; runId: number; interrupted: boolean; meta: Meta | null
+  }>({ attackId: null, runId: 0, interrupted: false, meta: null })
 
   const full = data?.fullCharset ?? FALLBACK_FULL
   const busy = !!attacking                            // pendant une attaque, rien ne se modifie : seul « Interrompre » l'arrête
@@ -208,13 +230,13 @@ export default function PasswordsPanel() {
   }, [])
 
   function cancelAnims() {
-    if (anim.current.raf) cancelAnimationFrame(anim.current.raf)
+    if (anim.current.poll) window.clearInterval(anim.current.poll)
     if (anim.current.scramble) window.clearInterval(anim.current.scramble)
-    anim.current.raf = undefined
+    anim.current.poll = undefined
     anim.current.scramble = undefined
   }
   function resetAttack() {
-    cancelAnims(); anim.current.runId++
+    cancelAnims(); anim.current.runId++; anim.current.attackId = null
     setAttacking(null); setProgress(0); setCounter(0); setElapsed(0); setVerdict(null); setErr(null)
   }
 
@@ -281,53 +303,62 @@ export default function PasswordsPanel() {
     return randStr(cs, len)
   }
 
-  // L'attaque tourne en TEMPS RÉEL à la vitesse de l'attaquant : au bout de t secondes,
-  // elle a fait vitesse × t essais. Aucune durée n'est imposée : un mot de passe faible
-  // tombe tout de suite, un mot de passe fort peut demander des heures ou des jours.
-  // Elle ne s'arrête que quand la cible est trouvée, que la limite de tentatives est
-  // atteinte (protection) ou que l'utilisateur clique sur « Interrompre ».
-  function frame(now: number) {
+  // L'attaque tourne pour de VRAI côté serveur (un vrai thread qui boucle à la
+  // vitesse réelle de cette machine) : cette fonction ne fait que relire sa
+  // progression par polling et l'afficher telle quelle, sans rien simuler.
+  // Elle ne s'arrête que quand la cible est trouvée, que la limite de tentatives
+  // est atteinte (protection) ou que l'utilisateur clique sur « Interrompre »
+  // (qui coupe vraiment le thread côté serveur, pas seulement l'affichage).
+  function applySnapshot(snap: AttackSnapshot, kind: 'brute' | 'dict', runId: number) {
     const a = anim.current
-    if (a.interrupted) return
-    const sec = Math.max(0, (now - a.start) / 1000)
-    const tries = Math.min(a.end, a.rate * sec)
-    setCounter(tries)
-    setProgress((tries / a.total) * 100)
-    setElapsed(Math.min(sec, a.end / a.rate))
-    if (tries < a.end) a.raf = requestAnimationFrame(frame)
-    else finishAttack()
+    if (a.runId !== runId) return               // interrompu / réinitialisé pendant l'attente
+    if (!snap.ok) { resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.')); return }
+    setCounter(snap.pos)
+    setProgress(snap.total > 0 ? (snap.pos / snap.total) * 100 : 0)
+    setElapsed(snap.elapsed)
+    if (!snap.done || !snap.result) return
+
+    cancelAnims()
+    let outcome: Outcome
+    if (kind === 'brute') {
+      const r = snap.result as Omit<BruteResult, 'ok' | 'error'>
+      if (!r.valid) { resetAttack(); setErr(_t('Mot de passe non conforme à la politique.')); return }
+      outcome = r.cracked
+        ? { kind: 'brute-found', pw: target, tries: Number(r.rank ?? snap.pos), sec: r.findSeconds ?? snap.elapsed, strength: r.findStrength ?? 'inviolable' }
+        : { kind: 'brute-blocked', limit: r.limit ?? 0, sec: snap.elapsed }
+    } else {
+      const r = snap.result as Omit<DictResult, 'ok'>
+      outcome = r.found
+        ? { kind: 'dict-found', position: r.position ?? 0, size: r.size, pw: target, sec: snap.elapsed }
+        : r.stopped ? { kind: 'dict-blocked', limit: r.limit ?? 0, sec: snap.elapsed } : { kind: 'dict-resist', size: r.size, sec: snap.elapsed }
+    }
+    setVerdict(outcome)
+    setAttacking(null)
+    if (a.meta) record({ ...a.meta, result: RESULT_OF[outcome.kind], tries: snap.pos, timeSec: snap.elapsed })
   }
 
-  function finishAttack() {
+  async function pollTick(runId: number, kind: 'brute' | 'dict') {
     const a = anim.current
-    if (a.scramble) window.clearInterval(a.scramble)
-    a.scramble = undefined
-    const sec = a.end / a.rate
-    setProgress(Math.min(100, (a.end / a.total) * 100))   // barre figée au point d'arrêt
-    setCounter(a.end)
-    setElapsed(sec)
-    setVerdict(a.outcome)
-    setAttacking(null)
-    if (a.outcome && a.meta && a.outcome.kind !== 'interrupted') {
-      record({ ...a.meta, result: RESULT_OF[a.outcome.kind], tries: a.end, timeSec: sec })
+    if (a.runId !== runId || !a.attackId) return
+    try {
+      applySnapshot(await api.attackProgress(a.attackId), kind, runId)
+    } catch {
+      if (a.runId !== runId) return
+      resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.'))
     }
   }
 
   function interrupt() {
     const a = anim.current
     a.interrupted = true
+    const stopId = a.attackId
     a.runId++                                  // une réponse du backend encore attendue sera ignorée
     cancelAnims()
-    let sec = 0, tries = 0
-    if (a.outcome) {                           // l'attaque avait démarré : on fige où elle en est
-      sec = Math.min(Math.max(0, (performance.now() - a.start) / 1000), a.end / a.rate)
-      tries = Math.min(a.end, a.rate * sec)
-    }
-    const pct = a.total > 0 ? (tries / a.total) * 100 : 0
-    setCounter(tries); setProgress(pct); setElapsed(sec)
-    setVerdict({ kind: 'interrupted', sec, tries, pct, fullHuman: a.fullHuman })
+    if (stopId) void api.attackStop(stopId).catch(() => undefined)   // coupe VRAIMENT le thread
+    // on fige l'affichage sur les dernières valeurs réelles connues (déjà posées par le dernier poll)
+    setVerdict({ kind: 'interrupted', sec: elapsed, tries: counter, pct: progress, fullHuman: null })
     setAttacking(null)
-    if (a.outcome && a.meta) record({ ...a.meta, result: 'interrupted', tries, timeSec: sec })
+    if (a.meta) record({ ...a.meta, result: 'interrupted', tries: counter, timeSec: elapsed })
   }
 
   async function runAttack(kind: 'brute' | 'dict') {
@@ -336,44 +367,24 @@ export default function PasswordsPanel() {
     const a = anim.current
     const id = ++a.runId
     a.interrupted = false
-    a.outcome = null
-    a.fullHuman = null
-    a.rate = data?.assumptions?.fastRate ?? DEFAULT_RATE
+    a.attackId = null
     a.meta = { attack: kind, case: caseId, password: target, protection: protectionText(kind) }
     a.scramble = window.setInterval(() => setScramble(scrambleSample(kind)), SCRAMBLE_MS)
     try {
-      if (kind === 'brute') {
-        const res: BruteResult = await api.bruteforce(caseId, target, isSmall ? undefined : length, effLimit, effRules, knowComposition)
-        if (a.runId !== id) return             // interrompu / réinitialisé pendant l'attente
-        if (!res.ok || !res.valid) { resetAttack(); setErr(_t('Mot de passe non conforme à la politique.')); return }
-        const space = Number(res.keyspace ?? 1) || 1
-        const rankNum = res.rank == null ? space : Number(res.rank)
-        a.rate = res.rate || a.rate
-        // la barre représente la fraction des COMBINAISONS possibles parcourues
-        // (si l'attaque est bloquée à N essais, on voit quel % de l'espace ça couvre)
-        a.total = space
-        a.end = res.cracked ? rankNum : (res.limit ?? space)
-        a.fullHuman = res.cracked ? res.findHuman : null
-        a.outcome = res.cracked
-          ? { kind: 'brute-found', pw: target, tries: rankNum, sec: rankNum / a.rate, strength: res.findStrength ?? 'inviolable' }
-          : { kind: 'brute-blocked', limit: res.limit ?? 0, sec: a.end / a.rate }
-      } else {
-        const res: DictResult = await api.dictionary(target, effLimit)
-        if (a.runId !== id) return
-        if (!res.ok) { resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.')); return }
-        a.total = res.size
-        a.end = res.found ? (res.position ?? 0) : res.scanned
-        const sec = a.end / a.rate
-        a.outcome = res.found
-          ? { kind: 'dict-found', position: res.position ?? 0, size: res.size, pw: target, sec }
-          : res.stopped ? { kind: 'dict-blocked', limit: res.limit ?? 0, sec } : { kind: 'dict-resist', size: res.size, sec }
-      }
+      const started = await api.attackStart({
+        kind, caseId: kind === 'brute' ? caseId : undefined, target,
+        length: kind === 'brute' && !isSmall ? length : undefined,
+        limit: effLimit, rules: effRules, knowComposition, lang: getLang(),
+      })
+      if (a.runId !== id) return               // interrompu / réinitialisé pendant l'attente
+      if (!started.ok) { resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.')); return }
+      a.attackId = started.id
+      applySnapshot(started, kind, id)         // déjà terminé pour les cas instantanés (binaire, numérique…)
+      if (a.runId === id && !started.done) a.poll = window.setInterval(() => pollTick(id, kind), POLL_MS)
     } catch {
       if (a.runId !== id) return
-      resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.')); return
+      resetAttack(); setErr(_t('Backend injoignable. Lance le serveur Python.'))
     }
-    a.start = performance.now()
-    a.raf = requestAnimationFrame(frame)
   }
 
   const classChips = [['require_lower', 'a-z'], ['require_upper', 'A-Z'], ['require_digit', '0-9'], ['require_symbol', _t('Symboles')]] as const
@@ -382,11 +393,23 @@ export default function PasswordsPanel() {
   const foundPw = verdict && ((verdict.kind === 'brute-found' && WEAK.includes(verdict.strength)) || verdict.kind === 'dict-found')
     ? verdict.pw : null
   // colonne à entourer dans le tableau : celle du jeu détecté si l'indice est
-  // actif, sinon la dernière (pire cas, jeu complet)
+  // actif, sinon la dernière (pire cas, jeu complet). Le tableau n'a que 5
+  // colonnes figées (jeux CUMULATIFS : 10, 26, 52, 62, 86) : dès que la cible
+  // mélange des classes autrement (ex. minuscules + chiffres + symboles, SANS
+  // majuscules = 60), aucune colonne ne correspond exactement — on entoure la
+  // plus proche en TAILLE, pas forcément la bonne composition. D'où le calcul
+  // exact juste en dessous (effSize/effHuman), affiché à part plutôt que de
+  // laisser croire que la case entourée est la valeur réelle.
   const tableCols = data?.table?.columns ?? []
   const highlightCol = tableCols.length
     ? (knowComposition ? colForSize(detectedCharset(target).length || 86, tableCols.map((c) => c.size)) : tableCols.length - 1)
     : 0
+  // valeur EXACTE pour la cible actuelle (jeu réellement détecté + longueur réelle,
+  // pas arrondie à une case du tableau) — même rythme de référence que le tableau
+  const effSize = knowComposition ? (detectedCharset(target).length || 86) : 86
+  const effLabel = knowComposition ? composition(target, caseId) : t('pire cas (jeu complet)')
+  const effRate = data?.table?.rate ?? data?.assumptions.fastRate ?? FAST_RATE_FALLBACK
+  const [effHuman, effStrength] = humanTimeCompact(Math.pow(effSize, length) / effRate)
 
   // =============================================================================
   return (
@@ -535,6 +558,14 @@ export default function PasswordsPanel() {
           <div className="divider" />
           <h3 className="sub-title">{t('Combien de temps, selon la taille et le type')}</h3>
           <TimeTable table={data.table} currentLen={length} highlightCol={highlightCol} />
+          <div className={'pw-table-exact ' + strengthClass(effStrength)}>
+            {t('Ta cible réelle : {comp} ({n} caractères), longueur {len} → {time}', {
+              comp: effLabel, n: effSize, len: length, time: t(effHuman),
+            })}
+            <span className="pw-table-exact-note">
+              {t(' — pas forcément une case du tableau ci-dessus : ses 5 colonnes sont figées (10, 26, 52, 62, 86 caractères), la case entourée est la plus proche en taille, pas forcément la même composition.')}
+            </span>
+          </div>
         </>
       )}
     </div>

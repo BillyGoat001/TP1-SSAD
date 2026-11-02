@@ -18,7 +18,7 @@ Run (production, after `npm run build` in ../frontend):
 import os
 import gc
 import time
-from typing import Any, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 import encryption as en
 import traces
 import passwords as pw
+import attacks
 import integrity
 import rsa_crypto as rsa
 import storage
@@ -113,6 +114,17 @@ class DictRequest(BaseModel):
     limit: Optional[int] = None
 
 
+class AttackStartRequest(BaseModel):
+    kind: Literal["brute", "dict"]
+    case: Optional[str] = None          # requis pour « brute »
+    target: str
+    length: Optional[int] = None
+    limit: Optional[int] = None
+    rules: Optional[Rules] = None
+    know_composition: bool = True
+    lang: Literal["fr", "en"] = "fr"    # ordre de lecture du dictionnaire (voir passwords._dict_order)
+
+
 class ValidateRequest(BaseModel):
     case: str
     target: str
@@ -135,6 +147,19 @@ class IntegrityDemoRequest(BaseModel):
     key: str
     original: str
     received: str
+
+
+class IntegritySealRequest(BaseModel):
+    key: str
+    message: str
+    encrypt: bool = True     # False = le message voyage en clair (démontre que chiffrement ≠ intégrité)
+
+
+class IntegrityOpenRequest(BaseModel):
+    key: str
+    record: Dict[str, Any]       # tel que renvoyé par /api/integrity/seal (son "secret" peut avoir été modifié par C)
+    protect: bool
+    tag: Optional[str] = None    # l'étiquette envoyée par A (ignorée si protect=False)
 
 
 class KeygenRequest(BaseModel):
@@ -477,6 +502,37 @@ def password_dictionary(req: DictRequest):
     return _ok(**pw.dictionary_attack(req.target, req.limit))
 
 
+# --- attaques en tâche de fond : vraie boucle, vraie progression, vrai arrêt ----
+# (remplace, côté frontend, les deux routes ci-dessus pour l'affichage en direct ;
+# elles restent utilisables telles quelles pour un résultat instantané/scripté)
+@app.post("/api/passwords/attack/start")
+def attack_start(req: AttackStartRequest):
+    try:
+        if req.kind == "brute":
+            if not req.case:
+                return _err("Cas manquant.")
+            run = attacks.start_bruteforce(req.target, req.case, req.length, req.limit,
+                                            _rules_dict(req.rules), req.know_composition)
+        else:
+            run = attacks.start_dictionary(req.target, req.limit, req.lang)
+    except ValueError as e:
+        return _err(str(e))
+    return _ok(**run.snapshot())
+
+
+@app.get("/api/passwords/attack/progress/{run_id}")
+def attack_progress(run_id: str):
+    run = attacks.get(run_id)
+    if run is None:
+        return _err("Attaque introuvable (terminée depuis trop longtemps, ou identifiant invalide).")
+    return _ok(**run.snapshot())
+
+
+@app.post("/api/passwords/attack/stop/{run_id}")
+def attack_stop(run_id: str):
+    return _ok(stopped=attacks.stop(run_id))
+
+
 # -------------------------------------------------------- integrity (P4) ----
 @app.post("/api/integrity/sign")
 def integrity_sign(req: SignRequest):
@@ -491,6 +547,22 @@ def integrity_verify(req: VerifyRequest):
 @app.post("/api/integrity/demo")
 def integrity_demo(req: IntegrityDemoRequest):
     return _ok(**integrity.demo(req.key, req.original, req.received))
+
+
+# canal A -> B réel : le message est vraiment chiffré (algo + clé tirés au
+# hasard, voir integrity.seal), et c'est ce chiffré que C peut altérer avant
+# que B ne l'ouvre (integrity.open_channel), protection HMAC activable ou non.
+@app.post("/api/integrity/seal")
+def integrity_seal(req: IntegritySealRequest):
+    return _ok(**integrity.seal(req.key, req.message, req.encrypt))
+
+
+@app.post("/api/integrity/open")
+def integrity_open(req: IntegrityOpenRequest):
+    try:
+        return _ok(**integrity.open_channel(req.key, req.record, req.protect, req.tag))
+    except (KeyError, TypeError, ValueError) as e:
+        return _err(f"Chiffré ou clé invalide : {e}")
 
 
 # ------------------------------------------ fichiers : historique + conversation ----
@@ -591,7 +663,7 @@ def health():
 def auth_status(request: Request):
     user = auth.read_token(request.cookies.get(auth.COOKIE)) if auth.auth_enabled() else "dev"
     return {"ok": True, "authenticated": bool(user), "user": user, "auth_required": auth.auth_enabled(),
-            "configured": bool(auth.load_users())}
+            "configured": auth.has_users()}
 
 
 @app.get("/api/auth/captcha")
@@ -619,21 +691,28 @@ def auth_captcha_discard(req: DiscardIn):
     return {"ok": True, "discarded": captcha.discard(req.id)}
 
 
-@app.post("/api/auth/login")
-def auth_login(req: LoginIn, request: Request):
-    if not auth.auth_enabled():
-        return JSONResponse({"ok": True, "user": "dev"})
+def _blocked_response(wait_captcha: Optional[str] = None):
+    if wait_captcha:
+        captcha.verify(wait_captcha, None)                         # le défi est détruit quand même
+    return JSONResponse({"ok": False, "error": "blocked", "message": _BLOCKED_MSG}, status_code=423)
+
+
+_BLOCKED_MSG = ("Compte bloqué pour cette adresse après 4 mots de passe erronés. "
+                "Depuis une autre adresse, la connexion reste possible. "
+                "Un administrateur peut débloquer avec : python make_user.py nom --unlock")
+
+
+def _gate(req, request: Request):
+    """Les protections communes à la connexion et à l'inscription : limite par IP, défi
+    anti-robot (usage unique), comportement humain. Renvoie une réponse d'erreur, ou None
+    si tout est bon."""
     ip = _ip(request)
-    ukey = "u:" + req.username.strip().lower()
-    wait = max(auth.locked_for("ip:" + ip), auth.locked_for(ukey))
+    wait = auth.locked_for("ip:" + ip)
     if wait:
         captcha.verify(req.captcha_id, None)                       # le défi est détruit quand même
         return JSONResponse({"ok": False, "error": "locked", "retry_after": wait,
                              "message": f"Trop de tentatives. Réessaie dans {wait} s."},
                             status_code=429, headers={"Retry-After": str(wait)})
-    if not auth.load_users():
-        return JSONResponse({"ok": False, "error": "setup", "message": "Aucun compte n'est configuré sur ce serveur."},
-                            status_code=503)
     # 1) le défi (usage unique)
     why = captcha.verify(req.captcha_id, req.answer, req.nonce)
     if why != "ok":
@@ -650,19 +729,57 @@ def auth_login(req: LoginIn, request: Request):
         auth.record_failure("ip:" + ip)
         return JSONResponse({"ok": False, "error": "captcha", "reason": "robot",
                              "message": "Comportement suspect : réessaie avec la souris ou le clavier."}, status_code=400)
-    # 3) les identifiants
-    user = auth.check_credentials(req.username, req.password)
+    return None
+
+
+@app.post("/api/auth/login")
+def auth_login(req: LoginIn, request: Request):
+    if not auth.auth_enabled():
+        return JSONResponse({"ok": True, "user": "dev"})
+    ip = _ip(request)
+    if auth.is_blocked(req.username, ip):                   # bloqué pour CETTE IP : même avec le bon mot de passe
+        return _blocked_response(req.captcha_id)
+    gate = _gate(req, request)
+    if gate:
+        return gate
+    # 3) les identifiants (au plus 4 mots de passe erronés de suite depuis cette IP,
+    #    puis ce couple compte/IP est bloqué — une autre IP peut toujours essayer)
+    user, remaining = auth.attempt_login(req.username, req.password, ip)
     if not user:
         auth.record_failure("ip:" + ip)
-        auth.record_failure(ukey)
-        return JSONResponse({"ok": False, "error": "credentials", "message": "Identifiant ou mot de passe incorrect."},
-                            status_code=401)
+        if remaining == 0:
+            return _blocked_response()
+        return JSONResponse({"ok": False, "error": "credentials", "remaining": remaining,
+                             "message": "Identifiant ou mot de passe incorrect."}, status_code=401)
     auth.record_success("ip:" + ip)
-    auth.record_success(ukey)
     resp = JSONResponse({"ok": True, "user": user})
     resp.set_cookie(auth.COOKIE, auth.make_token(user), max_age=auth.SESSION_SECONDS, httponly=True,
                     samesite="lax", secure=_cookie_secure(request), path="/")
     return resp
+
+
+_REGISTER_MSG = {
+    "username": "Identifiant : 3 à 40 caractères (lettres, chiffres, . _ @ -).",
+    "exists": "Cet identifiant existe déjà.",
+}
+
+
+@app.post("/api/auth/register")
+def auth_register(req: LoginIn, request: Request):
+    """Inscription : mêmes protections que la connexion (défi, preuve de travail, geste
+    humain, limite par IP). Le mot de passe est chiffré par l'un des trois algorithmes."""
+    if not auth.auth_enabled():
+        return JSONResponse({"ok": False, "error": "off", "message": "La connexion est désactivée."}, status_code=400)
+    gate = _gate(req, request)
+    if gate:
+        return gate
+    name, err = auth.register(req.username, req.password)
+    if err == "policy":
+        return JSONResponse({"ok": False, "error": "policy", "message": auth.password_problem(req.password)}, status_code=400)
+    if err:
+        return JSONResponse({"ok": False, "error": err, "message": _REGISTER_MSG[err]},
+                            status_code=409 if err == "exists" else 400)
+    return JSONResponse({"ok": True, "user": name}, status_code=201)
 
 
 @app.post("/api/auth/logout")

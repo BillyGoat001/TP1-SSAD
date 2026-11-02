@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "next_id": 52,
+  "next_id": 56,
   "entries": [
     {
       "op": "encrypt",
@@ -232,6 +232,50 @@
       "timeUs": 7.25,
       "id": 51,
       "at": "2026-10-21T10:34:19+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "YLKGLRO",
+      "algo": "caesar",
+      "algoLabel": "César",
+      "key": "3 (gauche)",
+      "timeUs": 1.43,
+      "id": 52,
+      "at": "2026-11-02T19:19:21+00:00"
+    },
+    {
+      "op": "decrypt",
+      "clear": "BONJOUR",
+      "cipher": "YLKGLRO",
+      "algo": "caesar",
+      "algoLabel": "César",
+      "key": "3 (gauche)",
+      "timeUs": 1.22,
+      "id": 53,
+      "at": "2026-11-02T19:20:29+00:00"
+    },
+    {
+      "op": "encrypt",
+      "clear": "BONJOUR",
+      "cipher": "YLKGLRO",
+      "algo": "caesar",
+      "algoLabel": "César",
+      "key": "3 (gauche)",
+      "timeUs": 1.19,
+      "id": 54,
+      "at": "2026-11-02T19:20:30+00:00"
+    },
+    {
+      "op": "decrypt",
+      "clear": "BONJOUR",
+      "cipher": "YLKGLRO",
+      "algo": "caesar",
+      "algoLabel": "César",
+      "key": "3 (gauche)",
+      "timeUs": 1.19,
+      "id": 55,
+      "at": "2026-11-02T19:20:34+00:00"
     }
   ]
 }

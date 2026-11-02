@@ -1,4 +1,28 @@
 {
   "version": 1,
-  "messages": []
+  "messages": [
+    {
+      "id": 1793647324401,
+      "at": "2026-11-02T19:22:04+00:00",
+      "from": "a",
+      "plain": "BONJOUR",
+      "cipher": "HTOLIZSW",
+      "params": {
+        "algo": "playfair",
+        "key": "KEY"
+      }
+    },
+    {
+      "id": 1793647379367,
+      "at": "2026-11-02T19:22:59+00:00",
+      "from": "b",
+      "plain": "COUCOU",
+      "cipher": "XJPXJP",
+      "params": {
+        "algo": "caesar",
+        "shift": "5",
+        "direction": "left"
+      }
+    }
+  ]
 }

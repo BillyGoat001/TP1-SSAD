@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "next_id": 79,
+  "next_id": 83,
   "entries": [
     {
       "attack": "brute",
@@ -243,6 +243,50 @@
       "timeSec": 0.0004911422729492188,
       "id": 78,
       "at": "2026-11-02T11:17:21+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "binaire",
+      "password": "101",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 6.0,
+      "timeSec": 0.00045228004455566406,
+      "id": 79,
+      "at": "2026-11-02T19:23:14+00:00"
+    },
+    {
+      "attack": "dict",
+      "case": "binaire",
+      "password": "101",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 451052.0,
+      "timeSec": 15.04417896270752,
+      "id": 80,
+      "at": "2026-11-02T19:23:30+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "numerique",
+      "password": "2413",
+      "protection": "Aucune",
+      "result": "found",
+      "tries": 115.0,
+      "timeSec": 0.0006651878356933594,
+      "id": 81,
+      "at": "2026-11-02T19:24:15+00:00"
+    },
+    {
+      "attack": "brute",
+      "case": "complexe",
+      "password": "Ro:Rc*38[-Gk",
+      "protection": "Aucune",
+      "result": "interrupted",
+      "tries": 6316860000.0,
+      "timeSec": 18.62220811843872,
+      "id": 82,
+      "at": "2026-11-02T19:24:57+00:00"
     }
   ]
 }
